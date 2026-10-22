@@ -4,6 +4,9 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 
+const { createBookRouter } = require('./routes/book.routes');
+const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
+
 /**
  * Build the Express app. The database pool is injected so tests can point the
  * app at a throw-away database.
@@ -25,6 +28,11 @@ function createApp({ pool }) {
       res.status(503).json({ status: 'degraded', database: 'down' });
     }
   });
+
+  app.use('/api/books', createBookRouter({ pool }));
+
+  app.use('/api', notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }
