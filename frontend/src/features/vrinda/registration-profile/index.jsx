@@ -1,0 +1,2 @@
+import FeaturePlaceholder from '../../../components/shared/FeaturePlaceholder/FeaturePlaceholder.jsx';
+export default function RegistrationProfilePage({ profile = false }) { return <FeaturePlaceholder title={profile ? 'Your reading life, in one place.' : 'Make room for more good reads.'} description={profile ? 'A future space for customer profile information and preferences.' : 'Customer registration will be implemented in this separate feature area.'} owner="Vrinda" story={profile ? '#4 · Customer profile management' : '#4 · Customer registration'} />; }
