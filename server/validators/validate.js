@@ -4,7 +4,9 @@ const { badRequest } = require('../utils/httpError');
 
 /**
  * Parse `data` with a zod schema. On failure throws a 400 HttpError that lists
- * every problem as { field, message } (the schemas carry plain-language messages).
+ * the problem of every invalid field as { field, message } (the schemas carry
+ * plain-language messages). A field gets ONE message - the first rule it broke -
+ * so a blank city says "City is required." and not also "City is too short.".
  *
  * @template T
  * @param {import('zod').ZodType<T>} schema
@@ -20,9 +22,8 @@ function validate(schema, data, summary = 'Some of the information is not valid.
   const details = [];
   for (const issue of result.error.issues) {
     const field = issue.path.join('.') || 'body';
-    const key = `${field}:${issue.message}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (seen.has(field)) continue;
+    seen.add(field);
     details.push({ field, message: issue.message });
   }
   throw badRequest(summary, details);
