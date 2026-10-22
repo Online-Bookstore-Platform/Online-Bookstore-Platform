@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('node:path');
+const http = require('node:http');
 const assert = require('node:assert/strict');
 const mysql = require('mysql2/promise');
 
@@ -37,6 +38,38 @@ async function createTestDatabase({ seed = false } = {}) {
   };
 }
 
+/**
+ * Start the real Express app on a random local port, backed by `pool`.
+ * Returns a tiny JSON client: `api.get('/api/books?q=austen')`.
+ */
+async function startTestServer(pool) {
+  const { createApp } = require('../app');
+  const server = await new Promise((resolve) => {
+    const s = http.createServer(createApp({ pool })).listen(0, '127.0.0.1', () => resolve(s));
+  });
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  async function request(method, urlPath, body, headers = {}) {
+    const res = await fetch(baseUrl + urlPath, {
+      method,
+      headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    return { status: res.status, body: text ? JSON.parse(text) : null };
+  }
+
+  return {
+    baseUrl,
+    get: (p, headers) => request('GET', p, undefined, headers),
+    post: (p, body, headers) => request('POST', p, body, headers),
+    put: (p, body, headers) => request('PUT', p, body, headers),
+    patch: (p, body, headers) => request('PATCH', p, body, headers),
+    delete: (p, headers) => request('DELETE', p, undefined, headers),
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
 /** Assert that a query is rejected by MySQL with the given error code. */
 async function assertDbError(promise, code, message) {
   await assert.rejects(promise, (err) => {
@@ -45,4 +78,4 @@ async function assertDbError(promise, code, message) {
   });
 }
 
-module.exports = { createTestDatabase, assertDbError };
+module.exports = { createTestDatabase, startTestServer, assertDbError };
