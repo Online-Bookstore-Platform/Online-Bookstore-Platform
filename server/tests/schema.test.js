@@ -87,6 +87,7 @@ describe('database schema', () => {
       'customers',
       'delivery_details',
       'inventory',
+      'inventory_adjustments',
       'order_items',
       'orders',
       'payments',

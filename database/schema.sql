@@ -98,6 +98,30 @@ CREATE TABLE inventory (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
+-- inventory_adjustments: audit trail of manual stock changes made by an
+-- administrator (who changed which book's stock, from what to what, and why).
+-- Sales and cancellations are traceable through orders instead.   [SO-2]
+-- -----------------------------------------------------------------------------
+CREATE TABLE inventory_adjustments (
+  id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  book_id         BIGINT UNSIGNED NOT NULL,
+  admin_id        BIGINT UNSIGNED NOT NULL,
+  quantity_before INT             NOT NULL,
+  quantity_after  INT             NOT NULL,
+  reason          VARCHAR(200)    NULL,
+  created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_inventory_adjustments_book (book_id, created_at),
+  KEY idx_inventory_adjustments_admin (admin_id),
+  CONSTRAINT fk_inventory_adjustments_book FOREIGN KEY (book_id) REFERENCES books (id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT fk_inventory_adjustments_admin FOREIGN KEY (admin_id) REFERENCES customers (id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT chk_inventory_adjustments_before CHECK (quantity_before >= 0),
+  CONSTRAINT chk_inventory_adjustments_after CHECK (quantity_after >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- -----------------------------------------------------------------------------
 -- carts / cart_items: one cart per customer. The cart stores no prices - the
 -- current catalogue price is read at checkout and frozen into order_items.
 -- -----------------------------------------------------------------------------

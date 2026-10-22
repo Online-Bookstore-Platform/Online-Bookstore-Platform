@@ -42,10 +42,10 @@ async function createTestDatabase({ seed = false } = {}) {
  * Start the real Express app on a random local port, backed by `pool`.
  * Returns a tiny JSON client: `api.get('/api/books?q=austen')`.
  */
-async function startTestServer(pool) {
+async function startTestServer(pool, { allowDevAuth = true } = {}) {
   const { createApp } = require('../app');
   const server = await new Promise((resolve) => {
-    const s = http.createServer(createApp({ pool })).listen(0, '127.0.0.1', () => resolve(s));
+    const s = http.createServer(createApp({ pool, allowDevAuth })).listen(0, '127.0.0.1', () => resolve(s));
   });
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
 
