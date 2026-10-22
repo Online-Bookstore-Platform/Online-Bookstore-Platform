@@ -2,6 +2,8 @@ import { Link, Route, Routes } from 'react-router-dom';
 import Header from './components/Header.jsx';
 import BookDetailsPage from './pages/BookDetailsPage.jsx';
 import CataloguePage from './pages/CataloguePage.jsx';
+import CheckoutPage from './pages/CheckoutPage.jsx';
+import PaymentPage from './pages/PaymentPage.jsx';
 
 function NotFoundPage() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<CataloguePage />} />
           <Route path="/books/:id" element={<BookDetailsPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/payment" element={<PaymentPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>

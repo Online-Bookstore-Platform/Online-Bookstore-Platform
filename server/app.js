@@ -6,6 +6,7 @@ const helmet = require('helmet');
 
 const { createBookRouter } = require('./routes/book.routes');
 const { createInventoryRouter } = require('./routes/inventory.routes');
+const { createCheckoutRouter } = require('./routes/checkout.routes');
 const { createAuth } = require('./middleware/auth');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
@@ -38,6 +39,7 @@ function createApp({ pool, allowDevAuth = false }) {
 
   app.use('/api/books', createBookRouter({ pool }));
   app.use('/api/inventory', createInventoryRouter({ pool, auth }));
+  app.use('/api/checkout', createCheckoutRouter({ pool, auth }));
 
   app.use('/api', notFoundHandler);
   app.use(errorHandler);

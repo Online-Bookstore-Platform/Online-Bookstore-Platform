@@ -639,9 +639,210 @@ a {
   color: var(--ink-soft);
 }
 
+/* ---- checkout ---------------------------------------------------------------- */
+
+.checkout {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 1.75rem var(--gutter) 4rem;
+}
+.checkout__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem);
+  gap: 2rem clamp(1.5rem, 5vw, 3rem);
+  align-items: start;
+  margin-top: 1.5rem;
+}
+.checkout__steps {
+  display: grid;
+  gap: 2rem;
+}
+.checkout-section {
+  padding: 1.25rem 1.5rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.checkout-section__title {
+  margin-bottom: 1rem;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.checkout-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.checkout-item {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr) auto;
+  gap: 0 1rem;
+  align-items: start;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+.checkout-item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.checkout-item__title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.checkout-item__title a {
+  color: inherit;
+  text-decoration: none;
+}
+.checkout-item__title a:hover {
+  text-decoration: underline;
+}
+.checkout-item__author,
+.checkout-item__qty {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+.checkout-item__total {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.checkout-item__problem {
+  margin-top: 0.4rem;
+  color: var(--danger);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.checkout-item--problem .checkout-item__cover {
+  opacity: 0.55;
+}
+.checkout-edit {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.delivery-form {
+  display: grid;
+  gap: 1rem;
+}
+.form-field label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: 600;
+}
+.form-field__optional {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+.form-field__hint {
+  margin: -0.15rem 0 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+.form-banner {
+  margin: 0 0 1rem;
+  padding: 0.7rem 1rem;
+  border-left: 4px solid var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-weight: 500;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn:focus-visible,
+.field:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.delivery-saved address,
+.order-summary address {
+  display: grid;
+  font-style: normal;
+}
+.delivery-saved .link-button {
+  margin-top: 0.75rem;
+}
+
+.order-summary {
+  position: sticky;
+  top: 1rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.order-summary__title {
+  margin-bottom: 0.75rem;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+.order-summary__rows {
+  margin: 0;
+}
+.order-summary__rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+}
+.order-summary__rows dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.order-summary__total {
+  margin-top: 0.4rem;
+  padding-top: 0.75rem !important;
+  border-top: 1px solid var(--line);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.order-summary__address {
+  margin: 1rem 0 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.order-summary__address h3 {
+  margin-bottom: 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.order-summary__cta {
+  width: 100%;
+  padding-block: 0.75rem;
+}
+.order-summary__reason {
+  margin-top: 0.6rem;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
 /* ---- small screens --------------------------------------------------------- */
 
 @media (max-width: 56rem) {
+  .checkout__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .order-summary {
+    position: static;
+  }
   .catalogue {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
@@ -670,6 +871,12 @@ a {
 }
 
 @media (max-width: 36rem) {
+  .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .checkout-section {
+    padding-inline: 1rem;
+  }
   .site-nav {
     display: none;
   }

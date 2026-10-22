@@ -278,6 +278,15 @@ npm install
 npm run dev
 ```
 
+### Signing in during development (temporary)
+
+Real sign-in is a separate feature (issue #1). Until it lands, checkout and the administrator inventory API need *some* signed-in user, so development can use a stand-in:
+
+1. In `server/.env` set `ALLOW_DEV_AUTH=true` (it is `false` by default; the API then answers 401 to every protected request).
+2. In `client/.env.development.local` set `VITE_DEV_USER_ID=2` (see `client/.env.example`). With the seed data, `2` is a customer with a ready cart, `3` is a customer without one, and `1` is the administrator.
+
+The stand-in works by trusting an `X-Dev-User-Id` request header, which anyone can forge. Never enable `ALLOW_DEV_AUTH` on a deployed server.
+
 ## Environment Variables
 
 Do not commit credentials or secrets to the repository.
@@ -288,6 +297,7 @@ DB_HOST=
 DB_USER=
 DB_PASSWORD=
 DB_NAME=
+ALLOW_DEV_AUTH=
 PAYMENT_API_KEY=
 PAYMENT_SECRET=
 ```
