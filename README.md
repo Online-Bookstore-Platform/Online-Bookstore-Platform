@@ -248,10 +248,24 @@ DB_PASSWORD=<your-db-password>
 DB_NAME=<your-database-name>
 ```
 
+Create the database and tables (requires MySQL 8.0.16 or newer). Add `--seed` to load sample books, categories and demo accounts:
+
+```bash
+npm run db:setup -- --seed
+```
+
+`npm run db:reset` drops and recreates the database (never allowed when `NODE_ENV=production`). The schema lives in `database/schema.sql`.
+
 Start the backend:
 
 ```bash
 npm run dev
+```
+
+Run the tests (they create and drop their own temporary databases, so the `DB_USER` in `.env` needs permission to create databases):
+
+```bash
+npm test
 ```
 
 ### Frontend
