@@ -25,7 +25,7 @@ npm install
 npm run dev
 ```
 
-The Vite app opens at `http://localhost:5173`. The Express health endpoint is `http://localhost:5000/api/health` (or the `PORT` process environment variable). The `.env.example` documents future configuration names; the scaffold does not load `.env` files or use database/payment settings. No real credentials belong in source control.
+The Vite app opens at `http://localhost:5173`. The Express health endpoint is `http://localhost:5000/api/health` (or the `PORT` process environment variable). The `.env.example` files list configuration names; this scaffold does not automatically load `.env` files. No real credentials belong in source control.
 
 Frontend production build:
 
@@ -37,13 +37,13 @@ npm run preview
 
 ## Current routes
 
-`/` is the complete static homepage. The following routes use shared placeholder screens: `/login`, `/books/:bookId`, `/payment`, `/admin`, `/catalogue`, `/checkout`, `/inventory`, `/register`, `/profile`, `/cart`, `/orders`, and `/orders/:orderId`. These pages identify the owner and planned feature; they contain no working workflows.
+`/` is the complete static homepage. Varchas pages at `/login`, `/books/:bookId`, `/payment`, and `/admin` now have feature UI and API handlers. Database and order/cart services must be supplied through the adapter contract in [backend/src/features/varchas/README.md](backend/src/features/varchas/README.md); without it, data-dependent requests return 503. The other routes (`/catalogue`, `/checkout`, `/inventory`, `/register`, `/profile`, `/cart`, `/orders`, and `/orders/:orderId`) remain static placeholders owned by Uditi and Vrinda.
 
 ## Project structure
 
 ```text
 frontend/  React + Vite application, shared UI, styles, static pages
-backend/   Minimal Express app with GET /api/health only
+backend/   Express app, health endpoint, and Varchas feature routes
 docs/      Ownership, collaboration, and architecture notes
 .github/   Pull request template
 ```
@@ -52,4 +52,11 @@ Feature ownership and integration rules are in [docs/TEAM_OWNERSHIP.md](docs/TEA
 
 ## Scope of this scaffold
 
-No authentication, registration, search, catalogue, book detail, cart, checkout, payment, order, inventory, administration, database schema, MySQL connection, seed data, or feature API has been added. Sample book content and CSS covers on the homepage are presentation-only.
+No customer registration, profile management, catalogue browsing, cart, checkout, order creation/history/tracking, inventory, MySQL schema/connection, or seed data has been added. Varchas authentication, book-detail, payment, and administrator APIs require database/service adapters; the mock payment provider is opt-in and is never a real transaction. Sample homepage content and CSS covers are presentation-only.
+
+Run backend unit and route tests with:
+
+```bash
+cd backend
+npm test
+```
