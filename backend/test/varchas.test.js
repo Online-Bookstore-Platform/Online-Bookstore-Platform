@@ -1,0 +1,129 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import session from 'express-session';
+import { once } from 'node:events';
+import { createApp } from '../src/app.js';
+import { hashPassword } from '../src/features/varchas/authentication/password.js';
+import { createAuthService } from '../src/features/varchas/authentication/auth.service.js';
+import { HttpError } from '../src/features/varchas/errors.js';
+import { validateBookInput, validateBookId } from '../src/features/varchas/book-details/book.validation.js';
+import { createPaymentService } from '../src/features/varchas/payments/payment.service.js';
+import { createPaymentProvider } from '../src/features/varchas/payments/payment.provider.js';
+import { createSessionMiddleware } from '../src/features/varchas/index.js';
+
+test('authentication verifies a bcrypt hash and returns no password fields', async () => {
+  const user = { id: 'u-1', name: 'Reader', email: 'reader@example.com', role: 'customer', passwordHash: await hashPassword('correct-horse') };
+  const service = createAuthService({ findByEmail: async email => email === user.email ? user : null, findById: async id => id === user.id ? user : null });
+  assert.deepEqual(await service.authenticate(user.email, 'correct-horse'), { id: 'u-1', name: 'Reader', email: user.email, role: 'customer' });
+  await assert.rejects(service.authenticate(user.email, 'incorrect-password'), error => error.status === 401);
+  await assert.rejects(service.authenticate('missing@example.com', 'incorrect-password'), error => error.status === 401);
+  assert.deepEqual(await service.getCurrentUser(user.id), { id: 'u-1', name: 'Reader', email: user.email, role: 'customer' });
+});
+
+test('book validation accepts safe edits and rejects bad prices, identifiers, and stock fields', () => {
+  const book = { title: 'A Book', author: 'An Author', isbn: '9781234567890', category: 'Fiction', description: 'A story.', price: '199.50', coverImageUrl: '' };
+  assert.equal(validateBookInput(book).price, 199.5);
+  assert.equal(validateBookId('book-123'), 'book-123');
+  assert.throws(() => validateBookId('../secrets'), error => error.status === 400);
+  assert.throws(() => validateBookInput({ price: -1 }, { partial: true }), error => error.status === 400);
+  assert.throws(() => validateBookInput({ stockQuantity: 100 }, { partial: true }), error => error.status === 400);
+});
+
+function paymentFixture({ outcome = 'succeeded', amount = 750 } = {}) {
+  const attempts = new Map();
+  let providerCalls = 0;
+  let orderLookups = 0;
+  let orderStatus = 'pending';
+  const orders = {
+    async getPayableOrder(id, customerId) { orderLookups += 1; return id === 'o-1' && customerId === 'u-1' ? { id, customerId, amount, currency: 'INR', status: orderStatus } : null; },
+    async recordPaymentStatus({ paymentStatus }) { if (paymentStatus === 'succeeded') orderStatus = 'paid'; },
+  };
+  const payments = {
+    async findByIdempotencyKey(key) { return [...attempts.values()].find(item => item.idempotencyKey === key) || null; },
+    async findById(id) { return attempts.get(id) || null; },
+    async createPending(input) { const item = { id: 'p-1', status: 'pending', ...input }; attempts.set(item.id, item); return item; },
+    async updateStatus(id, status, providerReference) { const item = { ...attempts.get(id), status, providerReference }; attempts.set(id, item); return item; },
+  };
+  const provider = { mode: 'mock', async process() { providerCalls += 1; return { status: outcome, providerReference: 'sandbox-ref' }; } };
+  return { service: createPaymentService({ orders, payments, provider }), attempts, get providerCalls() { return providerCalls; }, get orderLookups() { return orderLookups; } };
+}
+
+test('payment processing uses the server amount and reuses an idempotent attempt', async () => {
+  const fixture = paymentFixture();
+  const first = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-1' });
+  const second = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-1' });
+  assert.equal(first.attempt.amount, 750);
+  assert.equal(first.attempt.status, 'succeeded');
+  assert.equal(second.reused, true);
+  assert.equal(fixture.providerCalls, 1);
+  assert.equal(fixture.orderLookups, 1, 'a retry returns the prior result even after the order is marked paid');
+});
+
+test('a pending payment attempt can be cancelled by its owner', async () => {
+  const fixture = paymentFixture({ outcome: 'pending' });
+  const processed = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-1' });
+  assert.equal(processed.attempt.status, 'pending');
+  const cancelled = await fixture.service.cancel(processed.attempt.id, 'u-1');
+  assert.equal(cancelled.status, 'cancelled');
+});
+
+test('payment attempts reject missing ownership and invalid order amounts before provider use', async () => {
+  const fixture = paymentFixture({ amount: 0 });
+  await assert.rejects(fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-1' }), error => error instanceof HttpError && error.code === 'INVALID_ORDER_AMOUNT');
+  await assert.rejects(fixture.service.process({ orderId: 'o-1', customerId: 'u-2', idempotencyKey: 'key-2' }), error => error.status === 404);
+  assert.equal(fixture.providerCalls, 0);
+});
+
+test('mock payments require an explicit provider and never silently approve', async () => {
+  assert.equal(createPaymentProvider({}).mode, 'unconfigured');
+  assert.equal((await createPaymentProvider({ PAYMENT_PROVIDER: 'mock' }).process({ paymentId: 'p-1' })).status, 'failed');
+  assert.equal((await createPaymentProvider({ PAYMENT_PROVIDER: 'mock', PAYMENT_MOCK_RESULT: 'approved' }).process({ paymentId: 'p-1' })).status, 'succeeded');
+});
+
+test('production sessions require an explicit secret and persistent store', () => {
+  assert.throws(() => createSessionMiddleware({ production: true }), /persistent session store/);
+  assert.doesNotThrow(() => createSessionMiddleware({ production: true, secret: 'configured-secret', store: new session.MemoryStore() }));
+});
+
+test('admin book endpoints require a server-verified administrator role', async t => {
+  const passwordHash = await hashPassword('correct-horse');
+  const users = [
+    { id: 'u-customer', name: 'Reader', email: 'reader@example.com', role: 'customer', passwordHash },
+    { id: 'u-admin', name: 'Editor', email: 'admin@example.com', role: 'admin', passwordHash },
+  ];
+  const app = createApp({
+    sessionSecret: 'test-session-secret-that-is-long-enough',
+    env: { NODE_ENV: 'test', PAYMENT_PROVIDER: 'mock' },
+    repositories: {
+      users: { findByEmail: async email => users.find(user => user.email === email), findById: async id => users.find(user => user.id === id) },
+      books: { findById: async () => null, list: async () => [], create: async book => book, update: async () => null, deleteOrDeactivate: async () => false },
+      orders: { getPayableOrder: async () => null, recordPaymentStatus: async () => {} },
+      payments: { findByIdempotencyKey: async () => null, findById: async () => null, createPending: async input => ({ id: 'p-1', ...input }), updateStatus: async () => null },
+    },
+  });
+  const server = app.listen(0);
+  await once(server, 'listening');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const anonymous = await fetch(`${base}/api/admin/books`);
+  assert.equal(anonymous.status, 401);
+
+  const customerLogin = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'reader@example.com', password: 'correct-horse' }) });
+  assert.equal(customerLogin.status, 200);
+  const customerCookie = customerLogin.headers.get('set-cookie').split(';', 1)[0];
+  const customerAccess = await fetch(`${base}/api/admin/books`, { headers: { Cookie: customerCookie } });
+  assert.equal(customerAccess.status, 403);
+  const currentUser = await fetch(`${base}/api/auth/me`, { headers: { Cookie: customerCookie } });
+  assert.deepEqual((await currentUser.json()).user, { id: 'u-customer', name: 'Reader', email: 'reader@example.com', role: 'customer' });
+  const logoutResponse = await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: { Cookie: customerCookie } });
+  assert.equal(logoutResponse.status, 204);
+  const afterLogout = await fetch(`${base}/api/auth/me`, { headers: { Cookie: customerCookie } });
+  assert.equal(afterLogout.status, 401);
+
+  const adminLogin = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'correct-horse' }) });
+  const adminCookie = adminLogin.headers.get('set-cookie').split(';', 1)[0];
+  const adminAccess = await fetch(`${base}/api/admin/books`, { headers: { Cookie: adminCookie } });
+  assert.equal(adminAccess.status, 200);
+  assert.deepEqual(await adminAccess.json(), { books: [] });
+});

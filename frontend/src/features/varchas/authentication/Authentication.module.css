@@ -1,0 +1,13 @@
+.page { min-height: 66vh; display: grid; place-items: center; padding: 74px 18px 96px; background: radial-gradient(ellipse at 50% 38%, #eae7dc 0, transparent 55%); }
+.card { width: min(100%, 440px); padding: clamp(28px, 6vw, 52px); background: rgb(255 255 255 / 60%); border: 1px solid var(--line); border-radius: 5px; box-shadow: 0 22px 60px -48px #302c1f; }
+.card h1 { margin: 14px 0 8px; font: 450 clamp(2.8rem, 8vw, 4rem)/1 var(--serif); letter-spacing: -.05em; }
+.intro { margin: 0 0 30px; color: var(--muted); line-height: 1.6; font-size: .92rem; }
+.card form { display: grid; }
+.card label { margin: 14px 0 7px; font-size: .78rem; font-weight: 600; }
+.card input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid #cecdc5; border-radius: 3px; background: #fffefa; color: var(--ink); font: inherit; }
+.card input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.error { color: #982f26; font-size: .82rem; line-height: 1.5; }
+.submit { margin-top: 22px; min-height: 49px; display: flex; justify-content: space-between; align-items: center; padding: 0 17px; border: 0; border-radius: 3px; background: var(--ink); color: white; font: inherit; cursor: pointer; }
+.submit:disabled { opacity: .6; cursor: progress; }
+.register { margin: 22px 0 0; font-size: .8rem; color: var(--muted); }.register a { color: var(--ink); }
+.guard { min-height: 60vh; padding: 90px 24px; text-align: center; color: var(--muted); }.guard button { padding: 8px 14px; cursor: pointer; }
