@@ -1,0 +1,26 @@
+{
+  "name": "online-bookstore-server",
+  "version": "1.0.0",
+  "description": "REST API for the Online Bookstore (Node.js + Express + MySQL)",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.11"
+  },
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "db:setup": "node scripts/db-setup.js",
+    "db:reset": "node scripts/db-setup.js --reset --seed",
+    "test": "node --test --test-concurrency=1"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "mysql2": "^3.24.6",
+    "zod": "^4.6.7"
+  }
+}
