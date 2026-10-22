@@ -1,5 +1,6 @@
 import { Link, Route, Routes } from 'react-router-dom';
 import Header from './components/Header.jsx';
+import BookDetailsPage from './pages/BookDetailsPage.jsx';
 import CataloguePage from './pages/CataloguePage.jsx';
 
 function NotFoundPage() {
@@ -26,6 +27,7 @@ export default function App() {
       <div id="main">
         <Routes>
           <Route path="/" element={<CataloguePage />} />
+          <Route path="/books/:id" element={<BookDetailsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>

@@ -32,8 +32,8 @@ function isbnPrefixFromTerm(term) {
   return digits.length >= 4 && digits.length <= 13 ? digits : null;
 }
 
-function toBookDto(row) {
-  return {
+function toBookDto(row, { withDescription = false } = {}) {
+  const dto = {
     id: row.id,
     isbn: row.isbn,
     title: row.title,
@@ -44,6 +44,8 @@ function toBookDto(row) {
     stockStatus: stockStatus(row.quantity),
     inStock: row.quantity > 0,
   };
+  if (withDescription) dto.description = row.description;
+  return dto;
 }
 
 /**
@@ -108,6 +110,15 @@ async function searchBooks(db, { filters, sort, page, pageSize }) {
   };
 }
 
+/** One active book with its description, or null. */
+async function findBookById(db, id) {
+  const [rows] = await db.query(
+    `SELECT ${SELECT_COLUMNS}, b.description ${FROM_CLAUSE} WHERE b.id = ? AND b.is_active = 1`,
+    [id]
+  );
+  return rows.length > 0 ? toBookDto(rows[0], { withDescription: true }) : null;
+}
+
 const MAX_AUTHORS_LISTED = 200;
 
 /** Values for the filter controls: categories with counts, authors, price range. */
@@ -135,4 +146,4 @@ async function getFilterOptions(db) {
   };
 }
 
-module.exports = { searchBooks, getFilterOptions, escapeLike, isbnPrefixFromTerm };
+module.exports = { searchBooks, findBookById, getFilterOptions, escapeLike, isbnPrefixFromTerm };

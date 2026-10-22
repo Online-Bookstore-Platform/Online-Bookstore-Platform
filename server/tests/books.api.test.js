@@ -263,6 +263,7 @@ describe('GET /api/books (browse, search, filter, sort)', () => {
       await testDb.pool.query('UPDATE books SET is_active = 0 WHERE id = ?', [bookId]);
       try {
         assert.equal((await api.get('/api/books?q=Moonstone')).body.data.length, 0);
+        assert.equal((await api.get(`/api/books/${bookId}`)).status, 404);
         assert.equal((await api.get('/api/books')).body.pagination.totalItems, 24);
         const filters = (await api.get('/api/books/filters')).body.data;
         assert.equal(filters.categories.find((c) => c.name === 'Mystery').bookCount, 2);
@@ -273,7 +274,7 @@ describe('GET /api/books (browse, search, filter, sort)', () => {
   });
 });
 
-describe('GET /api/books/filters and unknown routes', () => {
+describe('GET /api/books/:id and /api/books/filters', () => {
   let testDb;
   let api;
 
@@ -284,6 +285,24 @@ describe('GET /api/books/filters and unknown routes', () => {
   after(async () => {
     await api.close();
     await testDb.drop();
+  });
+
+  it('returns the full details of a book, including its description', async () => {
+    const [{ id }] = (await api.get('/api/books?q=Dracula')).body.data;
+    const res = await api.get(`/api/books/${id}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.title, 'Dracula');
+    assert.equal(res.body.data.author, 'Bram Stoker');
+    assert.equal(res.body.data.category.name, 'Horror');
+    assert.match(res.body.data.description, /Transylvania/);
+  });
+
+  it('answers 404 for unknown or malformed ids', async () => {
+    for (const id of ['999999', 'abc', '0', '-1', '1.5', '1e3']) {
+      const res = await api.get(`/api/books/${id}`);
+      assert.equal(res.status, 404, `id "${id}"`);
+      assert.equal(res.body.error.code, 'NOT_FOUND');
+    }
   });
 
   it('lists categories (with counts), authors and the price range for the filter controls', async () => {
