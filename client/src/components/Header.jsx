@@ -13,6 +13,7 @@ export default function Header() {
           <NavLink to="/" end>
             Books
           </NavLink>
+          <NavLink to="/checkout">Checkout</NavLink>
         </nav>
       </div>
     </header>

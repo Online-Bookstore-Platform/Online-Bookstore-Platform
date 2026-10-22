@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config.js';
+import { authHeaders } from './auth.js';
 
 export class ApiError extends Error {
   constructor(message, { status = 0, code = 'UNKNOWN', details } = {}) {
@@ -16,7 +17,12 @@ async function request(method, path, { body, signal, headers } = {}) {
     response = await fetch(`${API_BASE_URL}/api${path}`, {
       method,
       signal,
-      headers: { Accept: 'application/json', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
+      headers: {
+        Accept: 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...authHeaders(),
+        ...headers,
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (err) {

@@ -71,6 +71,7 @@ describe('/api/checkout', () => {
         ]
       );
       assert.equal(itemCount, 3);
+      assert.deepEqual(items[0].category, { id: 1, name: 'Classics' }, 'the cover needs the category colour');
       assert.deepEqual(totals, { subtotal: 598 + items[1].unitPrice, total: 598 + items[1].unitPrice });
     });
 

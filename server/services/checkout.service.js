@@ -24,6 +24,7 @@ function toLineDto(row, problem) {
     author: row.author,
     isbn: row.isbn,
     coverImageUrl: row.cover_image_url,
+    category: { id: row.category_id, name: row.category_name },
     unitPrice: row.price,
     quantity: row.quantity,
     lineTotal: lineTotal(row.price, row.quantity),

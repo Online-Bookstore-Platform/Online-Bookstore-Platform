@@ -13,8 +13,11 @@ async function findCartId(db, customerId) {
 /** Cart lines with the book's CURRENT price, oldest line first. */
 async function findCartLines(db, cartId) {
   const [rows] = await db.query(
-    `SELECT ci.book_id, ci.quantity, b.title, b.author, b.isbn, b.price, b.cover_image_url, b.is_active
-       FROM cart_items ci JOIN books b ON b.id = ci.book_id
+    `SELECT ci.book_id, ci.quantity, b.title, b.author, b.isbn, b.price, b.cover_image_url, b.is_active,
+            c.id AS category_id, c.name AS category_name
+       FROM cart_items ci
+       JOIN books b ON b.id = ci.book_id
+       JOIN categories c ON c.id = b.category_id
       WHERE ci.cart_id = ?
       ORDER BY ci.added_at, ci.book_id`,
     [cartId]
