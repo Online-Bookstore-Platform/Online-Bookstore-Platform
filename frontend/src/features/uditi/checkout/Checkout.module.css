@@ -1,0 +1,85 @@
+/* Checkout (story #7). Shared design tokens only: --paper, --ink, --muted, --line, --accent, --serif. */
+
+.page { padding: 64px 0 110px; }
+.header { max-width: 680px; margin-bottom: 40px; }
+.header h1 { margin: 14px 0 12px; font: 450 clamp(2.4rem, 5vw, 3.9rem)/1 var(--serif); letter-spacing: -.055em; }
+.header p:not(:first-child) { margin: 0; color: var(--muted); font-size: .95rem; line-height: 1.7; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); gap: clamp(28px, 5vw, 72px); align-items: start; }
+
+/* --- delivery form -------------------------------------------------------------------------- */
+.form h2 { margin: 0 0 22px; font: 450 1.8rem/1.1 var(--serif); letter-spacing: -.03em; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.field { display: grid; gap: 7px; align-content: start; min-width: 0; }
+.wide { grid-column: 1 / -1; }
+.field label { font-size: .78rem; font-weight: 600; }
+.field input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid #cecdc5; border-radius: 3px; background: #fffefa; color: var(--ink); font: inherit; font-size: .92rem; }
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.field input[aria-invalid='true'] { border-color: #982f26; }
+.hint { margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.5; }
+.fieldError { margin: 0; color: #982f26; font-size: .8rem; line-height: 1.5; }
+
+/* --- order summary -------------------------------------------------------------------------- */
+.summary { position: sticky; top: 88px; padding: clamp(20px, 3vw, 32px); border: 1px solid var(--line); border-radius: 5px; background: #fffefa; box-shadow: 0 22px 60px -50px #302c1f; }
+.summaryHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.summaryHead h2 { margin: 0; font: 450 1.5rem/1.1 var(--serif); letter-spacing: -.03em; }
+.summaryHead a { color: var(--muted); font-size: .78rem; }
+.count { margin: 6px 0 0; color: var(--muted); font-size: .78rem; }
+
+.lines { margin: 18px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.lines li { display: flex; justify-content: space-between; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.lineMain { min-width: 0; }
+.lineTitle { margin: 0; font-size: .9rem; font-weight: 600; line-height: 1.35; }
+.lineTitle a { text-decoration: none; }
+.lineTitle a:hover { text-decoration: underline; }
+.lineMeta { margin: 3px 0 0; color: var(--muted); font-size: .78rem; }
+.lineTotal { margin: 0; font-size: .9rem; font-weight: 600; white-space: nowrap; }
+.lineProblem { background: #f6e7e4; margin-inline: -12px; padding-inline: 12px !important; }
+.problem { margin: 8px 0 0; color: #982f26; font-size: .8rem; line-height: 1.5; }
+
+.totals { margin: 18px 0 0; }
+.totals div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: .86rem; }
+.totals dt { color: var(--muted); }
+.totals dd { margin: 0; }
+.grand { margin-top: 6px; padding-top: 14px !important; border-top: 1px solid var(--line); font-size: 1.05rem !important; font-weight: 650; }
+.grand dt { color: var(--ink); }
+
+.deliverTo { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); font-size: .82rem; line-height: 1.55; overflow-wrap: anywhere; }
+.deliverTo h3 { margin: 0 0 6px; color: var(--muted); font-size: .7rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; }
+.deliverTo p { margin: 0; }
+
+.continue { width: 100%; min-height: 52px; margin-top: 22px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: white; font: inherit; font-size: .86rem; font-weight: 550; cursor: pointer; transition: background .2s ease; }
+.continue:hover:not(:disabled) { background: #41423b; }
+.continue:disabled { opacity: .55; cursor: not-allowed; }
+.blocked { margin: 18px 0 0; padding: 12px 14px; background: #f6e7e4; color: #982f26; font-size: .8rem; line-height: 1.5; }
+.blocked a { color: inherit; }
+.fine { margin: 14px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.6; }
+
+/* --- messages ------------------------------------------------------------------------------- */
+.notice { max-width: 760px; margin-bottom: 30px; padding: 16px 20px; border-left: 3px solid; background: #f1f0eb; }
+.notice:focus-visible { outline-offset: 3px; }
+.notice h2 { margin: 0 0 6px; font: 600 .95rem/1.3 inherit; }
+.notice ul { margin: 6px 0 0; padding-left: 18px; font-size: .85rem; line-height: 1.6; }
+.notice a { color: inherit; }
+.error { border-color: #982f26; background: #f6e7e4; color: #6e211a; }
+.warning { border-color: #b18a4d; background: #f6eedd; color: #5d4521; }
+.info { border-color: #6c7f8c; background: #e9eef1; color: #2f3f49; }
+
+/* --- full-page states (loading, error, empty) ------------------------------------------------ */
+.state { min-height: 58vh; padding: 90px 0 110px; display: grid; align-items: center; }
+.state h1 { margin: 14px 0 12px; max-width: 14ch; font: 450 clamp(2.6rem, 6vw, 4.4rem)/1.02 var(--serif); letter-spacing: -.05em; }
+.state p:not(:first-child) { max-width: 480px; color: var(--muted); line-height: 1.7; }
+.stateActions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 22px; }
+.stateActions button, .primaryLink { display: inline-flex; min-height: 46px; align-items: center; padding: 0 20px; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: white; font: inherit; font-size: .83rem; text-decoration: none; cursor: pointer; }
+.stateActions a:not(.primaryLink) { color: var(--ink); font-size: .85rem; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .summary { position: static; }
+}
+@media (max-width: 600px) {
+  .page { padding: 44px 0 80px; }
+  .fields { grid-template-columns: minmax(0, 1fr); }
+  .lineProblem { margin-inline: -8px; padding-inline: 8px !important; }
+}
+@media (prefers-reduced-motion: reduce) { .continue { transition: none; } }
