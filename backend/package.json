@@ -6,12 +6,15 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "db:setup": "node --env-file=.env database/setup.js",
+    "db:reset": "node --env-file=.env database/setup.js --reset"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "express-session": "^1.18.1",
-    "bcryptjs": "^2.4.3"
+    "mysql2": "^3.24.6"
   }
 }
