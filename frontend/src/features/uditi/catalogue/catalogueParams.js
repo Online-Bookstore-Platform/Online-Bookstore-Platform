@@ -20,7 +20,8 @@ export const SORT_OPTIONS = [
   { key: 'author-asc', label: 'Author, A to Z', sort: 'author', order: 'asc' },
   { key: 'price-asc', label: 'Price, low to high', sort: 'price', order: 'asc' },
   { key: 'price-desc', label: 'Price, high to low', sort: 'price', order: 'desc' },
-  { key: 'newest-desc', label: 'Newest first', sort: 'newest', order: 'desc' },
+  { key: 'newest-desc', label: 'Publication year, newest first', sort: 'newest', order: 'desc' },
+  { key: 'newest-asc', label: 'Publication year, oldest first', sort: 'newest', order: 'asc' },
 ];
 
 export const DEFAULT_STATE = Object.freeze({ q: '', categories: [], minPrice: '', maxPrice: '', availability: 'all', sortKey: 'title-asc', page: 1 });

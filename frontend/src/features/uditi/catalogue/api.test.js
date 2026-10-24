@@ -1,7 +1,7 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiError } from '../shared/api.js';
-import { addToCart, friendlyCartError } from './api.js';
+import { addToCart, friendlyCartError, isPurchasable } from './api.js';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -9,6 +9,15 @@ afterEach(() => {
 });
 
 describe('add to cart', () => {
+  it('allows cart use only for a complete local INR product record', () => {
+    const book = { storeProduct: { id: 7, price: 249, currency: 'INR', stockStatus: 'low_stock', available: true } };
+    assert.equal(isPurchasable(book), true);
+    assert.equal(isPurchasable({}), false);
+    assert.equal(isPurchasable({ storeProduct: { ...book.storeProduct, id: '7' } }), false);
+    assert.equal(isPurchasable({ storeProduct: { ...book.storeProduct, currency: 'USD' } }), false);
+    assert.equal(isPurchasable({ storeProduct: { ...book.storeProduct, available: undefined } }), false);
+  });
+
   it('posts one copy of the book to the cart API (not a local cart)', async () => {
     let seen;
     globalThis.fetch = async (path, options) => ((seen = { path, options }), { status: 201, ok: true, json: async () => ({}) });

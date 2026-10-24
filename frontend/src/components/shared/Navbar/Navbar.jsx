@@ -7,6 +7,6 @@ export default function Navbar() {
     <div className={styles.links}>
       <NavLink to="/catalogue">Discover</NavLink><a href="/#categories">Categories</a><a href="/#about">About</a>
     </div>
-    <div className={styles.actions}><Link to="/login" aria-label="Account">Account</Link><Link to="/cart" aria-label="Cart">Cart <span aria-hidden="true">↗</span></Link></div>
+    <div className={styles.actions}><Link to="/profile" aria-label="Account">Account</Link><Link to="/cart" aria-label="Cart">Cart <span aria-hidden="true">↗</span></Link></div>
   </div></nav>;
 }

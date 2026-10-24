@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import Container from '../../../components/shared/Container/Container.jsx';
 import { isAbort } from '../shared/api.js';
 import { formatPrice } from '../shared/format.js';
-import { addToCart, fetchBooks, fetchFilterOptions } from './api.js';
+import { fetchBooks, fetchFilterOptions } from './api.js';
 import {
   SORT_OPTIONS,
   activeFilterChips,
@@ -24,7 +24,8 @@ const LOADING = { status: 'loading', books: [], pagination: null, message: '' };
 
 /**
  * Story #3: browse, search, filter and sort the catalogue. Everything shown comes from
- * GET /api/catalogue/books (real database rows); the page state lives in the address bar.
+ * GET /api/catalogue/books (external discovery, with local inventory attached when ISBNs match);
+ * the page state lives in the address bar.
  */
 export default function CataloguePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,7 +36,6 @@ export default function CataloguePage() {
   const [options, setOptions] = useState({ status: 'loading', categories: [], priceRange: null });
   const [reload, setReload] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [cart, setCart] = useState({});
   const [searchDraft, setSearchDraft] = useState(state.q);
   const resultsHeading = useRef(null);
   const focusResults = useRef(false);
@@ -81,6 +81,12 @@ export default function CataloguePage() {
   }, [result]);
 
   useEffect(() => setSearchDraft(state.q), [state.q]);
+  useEffect(() => {
+    const query = searchDraft.trim();
+    if (query === state.q) return undefined;
+    const timer = window.setTimeout(() => update({ q: query }), 350);
+    return () => window.clearTimeout(timer);
+  }, [searchDraft, state.q, update]);
 
   const categoryNames = useMemo(() => new Map(options.categories.map(category => [category.id, category.name])), [options.categories]);
   const chips = activeFilterChips(state, categoryNames, formatPrice);
@@ -98,16 +104,6 @@ export default function CataloguePage() {
   function goToPage(page) {
     focusResults.current = true;
     update({ page });
-  }
-
-  async function handleAdd(book) {
-    setCart(current => ({ ...current, [book.id]: { busy: true } }));
-    try {
-      await addToCart(book.id);
-      setCart(current => ({ ...current, [book.id]: { message: `${book.title} is in your cart.`, added: true } }));
-    } catch (error) {
-      setCart(current => ({ ...current, [book.id]: { message: error.message, error: true, signIn: error.status === 401 } }));
-    }
   }
 
   const { status, books, pagination } = result;
@@ -141,8 +137,6 @@ export default function CataloguePage() {
             options={options}
             state={state}
             onToggleCategory={toggleCategory}
-            onAvailability={availability => update({ availability })}
-            onApplyPrice={prices => update(prices)}
             onClear={() => setSearchParams(toSearchParams(clearFilters(state)))}
             canClear={filtered}
           />
@@ -189,15 +183,15 @@ export default function CataloguePage() {
 
             {status === 'ready' && books.length === 0 && pagination.totalItems === 0 && (
               <div className={styles.state} role="status">
-                <h2>{filtered ? 'No books match that.' : 'The shelves are empty right now.'}</h2>
-                <p>{filtered ? 'Try fewer words, check the spelling, or remove a filter.' : 'Check back soon — new books are on their way.'}</p>
+                <h2>{filtered ? 'No books match that.' : 'No books found.'}</h2>
+                <p>{filtered ? 'Try fewer words, check the spelling, or remove a filter.' : 'The discovery providers returned no matching books. Please try again shortly.'}</p>
                 {filtered && <button type="button" onClick={() => setSearchParams(toSearchParams(clearFilters(state)))}>Clear all filters</button>}
               </div>
             )}
 
             {books.length > 0 && (
               <ul className={`${styles.grid} ${status === 'loading' ? styles.refreshing : ''}`}>
-                {books.map((book, index) => <BookResult key={book.id} book={book} index={index} cartState={cart[book.id]} onAdd={handleAdd} />)}
+                {books.map((book, index) => <BookResult key={book.id} book={book} index={index} />)}
               </ul>
             )}
 

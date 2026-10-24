@@ -1,6 +1,8 @@
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { createApp } from './app.js';
+import { createDatabasePool } from './config/database.js';
+import { createMySqlSessionStore } from './features/varchas/mysql-session-store.js';
 
 async function loadAdapters() {
   const modulePath = process.env.VARCHAS_ADAPTER_MODULE;
@@ -16,7 +18,23 @@ const adapters = await loadAdapters();
 if (process.env.NODE_ENV === 'production' && !adapters?.repositories) {
   throw new Error('Production requires a VARCHAS_ADAPTER_MODULE that provides repositories and a persistent sessionStore.');
 }
-const app = createApp({ repositories: adapters?.repositories, sessionStore: adapters?.sessionStore, sessionSecret: process.env.SESSION_SECRET });
+const pool = process.env.DB_NAME && process.env.DB_USER ? createDatabasePool() : null;
+const databaseUsers = pool ? {
+  async findByEmail(email) {
+    const [rows] = await pool.query('SELECT id, name, email, role, password_hash AS passwordHash FROM users WHERE email = ? LIMIT 1', [email]);
+    return rows[0] ?? null;
+  },
+  async findById(id) {
+    const [rows] = await pool.query('SELECT id, name, email, role FROM users WHERE id = ? LIMIT 1', [id]);
+    return rows[0] ?? null;
+  },
+} : null;
+const repositories = { ...(adapters?.repositories || {}), users: adapters?.repositories?.users || databaseUsers };
+const sessionStore = adapters?.sessionStore || (pool ? createMySqlSessionStore(pool) : null);
+if (process.env.NODE_ENV !== 'test' && !sessionStore) {
+  throw new Error('A persistent session store requires database configuration or a VARCHAS_ADAPTER_MODULE sessionStore.');
+}
+const app = createApp({ repositories, pool, sessionStore, sessionSecret: process.env.SESSION_SECRET });
 
 const port = Number(process.env.PORT) || 5000;
 

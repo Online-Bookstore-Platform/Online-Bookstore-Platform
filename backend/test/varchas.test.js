@@ -10,6 +10,7 @@ import { validateBookInput, validateBookId } from '../src/features/varchas/book-
 import { createPaymentService } from '../src/features/varchas/payments/payment.service.js';
 import { createPaymentProvider } from '../src/features/varchas/payments/payment.provider.js';
 import { createSessionMiddleware } from '../src/features/varchas/index.js';
+import { createMySqlSessionStore } from '../src/features/varchas/mysql-session-store.js';
 
 test('authentication verifies a bcrypt hash and returns no password fields', async () => {
   const user = { id: 'u-1', name: 'Reader', email: 'reader@example.com', role: 'customer', passwordHash: await hashPassword('correct-horse') };
@@ -85,6 +86,44 @@ test('production sessions require an explicit secret and persistent store', () =
   assert.doesNotThrow(() => createSessionMiddleware({ production: true, secret: 'configured-secret', store: new session.MemoryStore() }));
 });
 
+test('MySQL session store writes, reads, touches, expires, and destroys sessions', async () => {
+  const records = new Map();
+  const pool = {
+    async query(sql, params) {
+      if (sql.startsWith('INSERT INTO sessions')) {
+        records.set(params[0], { session_id: params[0], expires: params[1], data: params[2] });
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.startsWith('SELECT data, expires FROM sessions')) return [[records.get(params[0])].filter(Boolean)];
+      if (sql.startsWith('UPDATE sessions SET expires')) {
+        const row = records.get(params[1]);
+        if (row) row.expires = params[0];
+        return [{ affectedRows: row ? 1 : 0 }];
+      }
+      if (sql.startsWith('DELETE FROM sessions')) {
+        const existed = records.delete(params[0]);
+        return [{ affectedRows: existed ? 1 : 0 }];
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  };
+  const store = createMySqlSessionStore(pool);
+  const invoke = (method, ...args) => new Promise((resolve, reject) => store[method](...args, (error, result) => error ? reject(error) : resolve(result)));
+  const sessionData = { userId: 8, cookie: { expires: new Date(Date.now() + 60_000), maxAge: 60_000 } };
+
+  await invoke('set', 'sid-1', sessionData);
+  assert.equal(JSON.parse(records.get('sid-1').data).userId, 8);
+  assert.deepEqual(await invoke('get', 'sid-1'), JSON.parse(JSON.stringify(sessionData)));
+  await invoke('touch', 'sid-1', { ...sessionData, cookie: { ...sessionData.cookie, expires: new Date(Date.now() + 120_000) } });
+  assert.ok(records.get('sid-1').expires > Math.floor(Date.now() / 1000) + 60);
+
+  records.set('expired', { session_id: 'expired', expires: 1, data: JSON.stringify(sessionData) });
+  assert.equal(await invoke('get', 'expired'), null);
+  assert.equal(records.has('expired'), false);
+  await invoke('destroy', 'sid-1');
+  assert.equal(records.has('sid-1'), false);
+});
+
 test('admin book endpoints require a server-verified administrator role', async t => {
   const passwordHash = await hashPassword('correct-horse');
   const users = [
@@ -126,4 +165,83 @@ test('admin book endpoints require a server-verified administrator role', async 
   const adminAccess = await fetch(`${base}/api/admin/books`, { headers: { Cookie: adminCookie } });
   assert.equal(adminAccess.status, 200);
   assert.deepEqual(await adminAccess.json(), { books: [] });
+});
+
+test('registered customer can sign in through the mounted session flow', async t => {
+  const users = new Map();
+  let nextId = 1;
+  const pool = {
+    async query(sql, params) {
+      if (sql.startsWith('INSERT INTO users')) {
+        const user = { id: nextId++, name: params[0], email: params[1], phone: params[2], role: 'customer', passwordHash: params[3] };
+        users.set(user.email, user);
+        return [{ insertId: user.id }];
+      }
+      if (sql.startsWith('SELECT id, name, email, phone, role FROM users')) {
+        const user = [...users.values()].find(candidate => candidate.id === params[0]);
+        return [[user ? { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role } : undefined].filter(Boolean)];
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  };
+  const app = createApp({
+    pool,
+    sessionSecret: 'test-session-secret-that-is-long-enough',
+    env: { NODE_ENV: 'test' },
+    repositories: {
+      users: {
+        async findByEmail(email) { return users.get(email) || null; },
+        async findById(id) { return [...users.values()].find(user => user.id === id) || null; },
+      },
+    },
+  });
+  const server = app.listen(0);
+  await once(server, 'listening');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const invalidLogin = await fetch(`${base}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'not-an-email', password: 'too-short' }),
+  });
+  assert.equal(invalidLogin.status, 400);
+  const missingUserLogin = await fetch(`${base}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'missing@example.com', password: 'reading-password' }),
+  });
+  assert.equal(missingUserLogin.status, 401);
+
+  const registration = await fetch(`${base}/api/users/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Reader One', email: 'reader@example.com', phone: '', password: 'reading-password', confirmPassword: 'reading-password', acceptedTerms: true }),
+  });
+  assert.equal(registration.status, 201);
+  assert.equal((await registration.json()).user.passwordHash, undefined);
+  assert.match(users.get('reader@example.com').passwordHash, /^\$2/);
+
+  const wrongPassword = await fetch(`${base}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'reader@example.com', password: 'wrong-password' }),
+  });
+  assert.equal(wrongPassword.status, 401);
+
+  const login = await fetch(`${base}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'reader@example.com', password: 'reading-password' }),
+  });
+  assert.equal(login.status, 200);
+  const cookie = login.headers.get('set-cookie');
+  assert.match(cookie, /HttpOnly/i);
+  const sessionCookie = cookie.split(';', 1)[0];
+  const current = await fetch(`${base}/api/auth/me`, { headers: { Cookie: sessionCookie } });
+  assert.deepEqual((await current.json()).user, { id: 1, name: 'Reader One', email: 'reader@example.com', role: 'customer' });
+
+  const profile = await fetch(`${base}/api/profile`, { headers: { Cookie: sessionCookie } });
+  assert.equal(profile.status, 200);
+  assert.deepEqual((await profile.json()).user, { id: 1, name: 'Reader One', email: 'reader@example.com', phone: null, role: 'customer' });
+
+  const logout = await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: { Cookie: sessionCookie } });
+  assert.equal(logout.status, 204);
+  const protectedProfile = await fetch(`${base}/api/profile`, { headers: { Cookie: sessionCookie } });
+  assert.equal(protectedProfile.status, 401);
 });

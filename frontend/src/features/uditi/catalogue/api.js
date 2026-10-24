@@ -4,6 +4,15 @@ export const fetchBooks = (query, signal) => apiRequest(`/api/catalogue/books?${
 
 export const fetchFilterOptions = signal => apiRequest('/api/catalogue/filters', { signal }).then(result => result.filters);
 
+export function isPurchasable(book) {
+  const product = book?.storeProduct;
+  return Number.isSafeInteger(product?.id) && product.id > 0
+    && typeof product.price === 'number' && Number.isFinite(product.price) && product.price >= 0
+    && product.currency === 'INR'
+    && ['in_stock', 'low_stock', 'out_of_stock'].includes(product.stockStatus)
+    && typeof product.available === 'boolean';
+}
+
 /**
  * Turn the cart API's failure into something a shopper can act on.
  * The cart itself belongs to the cart feature (Vrinda); this page only calls it.

@@ -20,7 +20,7 @@ npm run db:setup -- --seed  # ...and load the sample data (only into a database 
 npm run db:reset            # DROP the database, recreate it, apply schema + sample data (refused when NODE_ENV=production)
 ```
 
-The npm scripts read `backend/.env` with `node --env-file=.env` (the application itself still does not load `.env` automatically – start it with `node --env-file=.env src/server.js` or set the variables in the shell). The database user needs `CREATE`/`DROP` on `DB_NAME` for the setup script; the running application only needs `SELECT, INSERT, UPDATE, DELETE`.
+`npm run dev` and the database setup scripts load `backend/.env` with Node’s `--env-file` option. `npm start` does not load it; start production with the deployment environment configured, or locally with `node --env-file=.env src/server.js`. The database user needs `CREATE`/`DROP` on `DB_NAME` for the setup script; the running application only needs `SELECT, INSERT, UPDATE, DELETE`.
 
 To sign in with the three demo accounts, set `SEED_DEMO_PASSWORD` (8–200 characters) before `db:reset`. The seed file contains **no passwords**; the script stores a bcrypt hash of that value. Never set it on a real deployment, and never load the sample data into one.
 
@@ -29,6 +29,8 @@ To sign in with the three demo accounts, set `SEED_DEMO_PASSWORD` (8–200 chara
 | `DB_HOST`, `DB_PORT` | MySQL server (defaults `localhost`, `3306`) |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Database and credentials (placeholders only in `.env.example`) |
 | `DB_POOL_SIZE` | Optional pool size (default 10) |
+| `GOOGLE_BOOKS_API_KEY` | Optional Google Books Volumes API key; used only when Open Library is unavailable |
+| `OPEN_LIBRARY_USER_AGENT` | Optional Open Library client identifier |
 | `SEED_DEMO_PASSWORD` | Optional, local demos only |
 
 There is no migration framework: the schema is one reviewed file. During development change `schema.sql` and run `npm run db:reset`; once real data exists, ship an `ALTER` script next to it and keep `schema.sql` equal to the end result.

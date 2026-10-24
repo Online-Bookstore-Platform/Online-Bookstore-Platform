@@ -1,6 +1,6 @@
 # Varchas feature integration contract
 
-This area implements the Varchas feature routes and services. The project currently has no database connection, database schema, order service, payment repository, or persistent session-store adapter. Feature handlers therefore fail closed with HTTP 503 until those dependencies are injected; they do not store user, book, order, or payment data in process memory.
+This area implements Varchas authentication, book-detail, payment, and admin routes. `src/server.js` creates the shared MySQL pool and a parameterized user repository when `DB_NAME` and `DB_USER` are configured; login and authorization use that repository. Book, order, and payment repositories still depend on the adapter contract below. Unconfigured dependencies fail closed with HTTP 503.
 
 ## Repository/service adapters
 
@@ -29,7 +29,7 @@ Pass these adapters to `createApp({ repositories, sessionSecret, sessionStore })
 
 Database adapters must use parameterized queries, hash customer passwords with the exported `hashPassword` helper, enforce uniqueness of payment idempotency keys atomically, and preserve the database contract owned by Uditi. `createPending` must be transactional: re-check the order amount/status and prevent concurrent active attempts for one order while allowing a new attempt after a terminal decline/cancellation/timeout. It must enforce unique idempotency keys across processes. `updateStatus` must make conditional transitions atomic and return the final persisted attempt. `deleteOrDeactivate` must preserve referential-integrity rules. `getPayableOrder` must verify ownership and return the server-calculated amount; the browser never supplies an amount. `recordPaymentStatus` delegates consistency with order state to Vrinda's order service. Raw card data is rejected and must be handled only by a configured provider. A production provider should support idempotent processing and status verification by the server payment ID so retries after a timeout can safely reconcile an uncertain result.
 
-Production startup requires `SESSION_SECRET` and `VARCHAS_ADAPTER_MODULE` with a persistent `sessionStore`. The default development session store is Express MemoryStore and is not suitable for production. Local Vite requests proxy `/api` to port 5000, keeping the session cookie same-origin. Without `VARCHAS_ADAPTER_MODULE`, the development server starts but DB-dependent endpoints return 503.
+When MySQL is configured, development uses the built-in `MySqlSessionStore` over the shared pool and the `sessions` table in `database/schema.sql`; startup fails if a non-test server has neither MySQL configuration nor an adapter-provided persistent `sessionStore`. The schema's `session_id`, `expires`, and `data` columns match the store implementation. Production still requires `SESSION_SECRET` and `VARCHAS_ADAPTER_MODULE` with a persistent `sessionStore`. Local Vite requests proxy `/api` to port 5000, keeping the session cookie same-origin. Without DB configuration, login and registration are unavailable; without the adapter, book, payment, and admin database endpoints remain unavailable.
 
 ## Endpoints
 
@@ -52,4 +52,4 @@ Payment outcomes are `succeeded`, `failed`, `cancelled`, or `timed_out`. Configu
 ## Cross-member dependencies
 
 - **Uditi:** database schema/connection, user and book repository field mapping, transaction/idempotency uniqueness, persistent session storage integration.
-- **Vrinda:** order lookup and payment-status recording contract. Book-details Add to Cart currently calls the proposed `POST /api/cart/items` with `{ bookId, quantity: 1 }`; this must match Vrinda's cart API when available.
+- **Vrinda/Uditi:** the cart and catalogue schema use numeric `books.id` values, while the live Open Library detail route uses provider work IDs such as `works/OL123W`. Map/associate provider works to actual store book rows before enabling Add to Cart from live detail results; do not send provider IDs directly to the cart.

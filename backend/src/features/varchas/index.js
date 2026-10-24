@@ -30,15 +30,16 @@ export function createSessionMiddleware({ secret, store, production = process.en
   });
 }
 
-export function createVarchasRouter({ repositories = unavailableRepositories, env = process.env } = {}) {
+export function createVarchasRouter({ repositories = {}, env = process.env } = {}) {
   const router = Router();
-  const authService = createAuthService(repositories.users);
-  const auth = createAuthMiddleware(repositories.users);
-  const paymentService = createPaymentService({ orders: repositories.orders, payments: repositories.payments, provider: createPaymentProvider(env) });
+  const deps = { ...unavailableRepositories, ...repositories };
+  const authService = createAuthService(deps.users);
+  const auth = createAuthMiddleware(deps.users);
+  const paymentService = createPaymentService({ orders: deps.orders, payments: deps.payments, provider: createPaymentProvider(env) });
 
   router.use('/auth', createAuthRouter({ authService, requireAuth: auth.requireAuth }));
-  router.use('/books', createBooksRouter({ books: repositories.books, requireAdmin: auth.requireAdmin }));
+  router.use('/books', createBooksRouter({ books: deps.books, requireAdmin: auth.requireAdmin }));
   router.use('/payments', createPaymentsRouter({ paymentService, requireAuth: auth.requireAuth }));
-  router.use('/admin', createAdminBooksRouter({ books: repositories.books, requireAdmin: auth.requireAdmin }));
+  router.use('/admin', createAdminBooksRouter({ books: deps.books, requireAdmin: auth.requireAdmin }));
   return router;
 }
