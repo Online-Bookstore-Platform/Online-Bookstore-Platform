@@ -2,6 +2,12 @@
 
 Database schema and connection (#13) are in [`backend/database/`](../../../database/README.md) and `src/config/database.js`.
 
+## Live discovery and store inventory
+
+`GET /api/catalogue/books` uses Open Library for live discovery and falls back to Google Books when Open Library is unavailable. Set `GOOGLE_BOOKS_API_KEY` in the backend runtime environment to enable that fallback; Google requires an API key or OAuth token for public Volumes API requests. Open Library discovery does not require a paid service or Google key. If both providers are unavailable (or the fallback key is absent), the endpoint returns an actionable error for the catalogue Retry control.
+
+Discovery records keep their Open Library work ID or Google Books volume ID. A local product is attached only when a provider ISBN exactly matches the normalized ISBN in `books`; that product's numeric `books.id`, `books.price`, and `inventory.quantity` remain authoritative for cart and checkout. No product or price is created from provider metadata.
+
 ```
 uditi/
   index.js              createUditiRouter({ pool, requireAuth, requireAdmin, cartReader }) + helpers other features may import

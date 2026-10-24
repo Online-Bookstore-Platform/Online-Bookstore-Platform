@@ -1,11 +1,11 @@
 # Online Bookstore
 
-Team 16's responsive bookstore project scaffold. It follows the React, Node.js/Express, and planned MySQL stack in the project SRS/SAD/STP. The site currently contains a static visual prototype and navigable feature placeholders; it does not implement bookstore workflows.
+Team 16's responsive bookstore project built with React, Node.js/Express, and MySQL. It includes team-owned account, cart, catalogue, checkout, inventory, and order features alongside the approved folio visual design.
 
 ## Requirements
 
 - Node.js 20 or newer and npm
-- MySQL is planned for later work but is not needed to run this scaffold
+- MySQL 8.0.16+ for registration, login, cart and other database-backed features
 
 ## Run locally
 
@@ -37,7 +37,7 @@ npm run preview
 
 ## Current routes
 
-`/` is the complete static homepage. Varchas pages at `/login`, `/books/:bookId`, `/payment`, and `/admin` now have feature UI and API handlers. Database and order/cart services must be supplied through the adapter contract in [backend/src/features/varchas/README.md](backend/src/features/varchas/README.md); without it, data-dependent requests return 503. The other routes (`/catalogue`, `/checkout`, `/inventory`, `/register`, `/profile`, `/cart`, `/orders`, and `/orders/:orderId`) remain static placeholders owned by Uditi and Vrinda.
+`/` preserves the approved folio homepage. `/catalogue` uses live Open Library search metadata and `/books/:bookId` displays the selected Open Library work. The existing `/login` and `/register` flows use the server session and Vrinda registration implementation when MySQL settings are configured. See [integration notes](docs/INTEGRATION_NOTES.md) for the required database/review handoffs and current external catalogue limitations.
 
 ## Project structure
 
@@ -50,9 +50,9 @@ docs/      Ownership, collaboration, and architecture notes
 
 Feature ownership and integration rules are in [docs/TEAM_OWNERSHIP.md](docs/TEAM_OWNERSHIP.md) and [docs/DEVELOPMENT_GUIDELINES.md](docs/DEVELOPMENT_GUIDELINES.md). The supplied SRS, SAD, and STP remain at the repository root.
 
-## Scope of this scaffold
+## Database-backed features
 
-No customer registration, profile management, catalogue browsing, cart, checkout, order creation/history/tracking, inventory, MySQL schema/connection, or seed data has been added. Varchas authentication, book-detail, payment, and administrator APIs require database/service adapters; the mock payment provider is opt-in and is never a real transaction. Sample homepage content and CSS covers are presentation-only.
+The repository includes a MySQL schema, database connection and team-owned registration, cart, order, checkout, inventory and authentication features. Configure the database variables in `backend/.env.example` and set `SESSION_SECRET` before starting the backend with that environment. Production additionally requires Varchas's persistent session store adapter. Payment mock mode is opt-in and never represents a real transaction. The review migration is a proposal pending Uditi's integration into the shared migration process.
 
 Run backend unit and route tests with:
 

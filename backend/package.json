@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "dev": "node --env-file=.env --watch src/server.js",
     "test": "node --test",
     "db:setup": "node --env-file=.env database/setup.js",
     "db:reset": "node --env-file=.env database/setup.js --reset"

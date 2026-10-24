@@ -49,9 +49,8 @@ CREATE TABLE users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
--- sessions: server-side login sessions for a persistent express-session store
---   (same layout as the express-mysql-session package). Not used until the
---   integration owner connects a persistent store; see the Varchas README.
+-- sessions: server-side login sessions for the MySQL-backed express-session
+--   store. Column names and types match the common express-mysql-session layout.
 -- -----------------------------------------------------------------------------
 CREATE TABLE sessions (
   session_id VARCHAR(128)     NOT NULL,

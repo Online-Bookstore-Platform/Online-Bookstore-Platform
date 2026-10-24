@@ -4,7 +4,7 @@ This module implements customer registration/profile (#4), the persistent cart (
 
 ## Integration
 
-`createVrindaRouter({ pool, requireAuth })` returns an Express router for mounting under `/api`. Supply the existing MySQL pool and Varchas `requireAuth` middleware. Missing dependencies fail closed with HTTP 503. The router is intentionally not mounted from `src/app.js`, which remains integration-owned.
+`createVrindaRouter({ pool, requireAuth })` returns an Express router mounted under `/api` by `src/app.js` when the server has a configured shared MySQL pool. The app supplies Varchas's `requireAuth` middleware. Missing dependencies fail closed with HTTP 503.
 
 ```js
 import { createAuthMiddleware } from './features/varchas/authentication/auth.middleware.js';

@@ -9,6 +9,10 @@ function regenerateSession(session) {
   return new Promise((resolve, reject) => session.regenerate(error => error ? reject(error) : resolve()));
 }
 
+function saveSession(session) {
+  return new Promise((resolve, reject) => session.save(error => error ? reject(error) : resolve()));
+}
+
 function destroySession(session) {
   return new Promise((resolve, reject) => session.destroy(error => error ? reject(error) : resolve()));
 }
@@ -18,12 +22,13 @@ export function createAuthRouter({ authService, requireAuth, sessionCookieName =
 
   router.post('/login', loginLimit, asyncHandler(async (request, response) => {
     const { email, password } = request.body ?? {};
-    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || typeof password !== 'string' || password.length < 8 || password.length > 200) {
+    if (typeof email !== 'string' || email.trim().length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || typeof password !== 'string' || password.length < 8 || password.length > 200) {
       throw new HttpError(400, 'INVALID_LOGIN_INPUT', 'Enter a valid email and a password of at least 8 characters.');
     }
     const user = await authService.authenticate(email.trim().toLowerCase(), password);
     await regenerateSession(request.session);
     request.session.userId = user.id;
+    await saveSession(request.session);
     response.json({ user });
   }));
 

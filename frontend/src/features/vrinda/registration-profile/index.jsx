@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, loginPath } from '../../uditi/shared/api.js';
 import { fieldErrors, getProfile, registerCustomer, updateProfile } from '../api.js';
+import { logout } from '../../varchas/api.js';
 import styles from './RegistrationProfile.module.css';
 
 const emptyRegistration = { name: '', email: '', phone: '', password: '', confirmPassword: '', acceptedTerms: false };
@@ -15,12 +16,17 @@ export default function RegistrationProfilePage({ profile = false }) {
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
   const [loading, setLoading] = useState(profile);
+  const [reloadKey, setReloadKey] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!profile) return undefined;
     const controller = new AbortController();
+    setLoading(true);
+    setErrors(current => ({ ...current, form: undefined }));
     getProfile(controller.signal).then(setUser).catch(error => {
       if (error.name === 'AbortError') return;
       if (error instanceof ApiError && error.status === 401) {
@@ -30,7 +36,7 @@ export default function RegistrationProfilePage({ profile = false }) {
       setErrors({ form: error.message });
     }).finally(() => setLoading(false));
     return () => controller.abort();
-  }, [profile, navigate]);
+  }, [profile, navigate, reloadKey]);
 
   function change(field, value) {
     setValues(current => ({ ...current, [field]: value }));
@@ -96,12 +102,84 @@ export default function RegistrationProfilePage({ profile = false }) {
     }
   }
 
+  async function signOut() {
+    setLogoutBusy(true);
+    setLogoutError('');
+    try {
+      await logout();
+      setUser(null);
+      navigate('/', { replace: true });
+    } catch (error) {
+      setLogoutError(error.message || 'We could not log you out. Please try again.');
+    } finally {
+      setLogoutBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (profile && user) setValues({ name: user.name ?? '', email: user.email ?? '', phone: user.phone ?? '' });
   }, [profile, user]);
 
   if (profile && loading) return <main className={styles.state} aria-live="polite"><p>Loading your profile…</p></main>;
-  if (profile && errors.form && !user) return <main className={styles.state}><p className={styles.error} role="alert">{errors.form}</p><Link to="/">Return home</Link></main>;
+  if (profile && errors.form && !user) return <main className={styles.state}><p className={styles.error} role="alert">{errors.form}</p><button type="button" onClick={() => setReloadKey(value => value + 1)}>Try again</button><Link to="/">Return home</Link></main>;
+
+  if (profile) {
+    const initials = getInitials(user?.name);
+    const roleLabel = user?.role === 'customer' ? 'Customer account' : user?.role === 'admin' ? 'Administrator account' : '';
+    return <main className={styles.dashboard}>
+      <div className={styles.dashboardInner}>
+        <header className={styles.dashboardHeader}>
+          <div>
+            <p className="eyebrow">Your folio</p>
+            <h1 id="account-title">Your account</h1>
+            <p className={styles.dashboardIntro}>A quiet place to keep your details close and your orders in view.</p>
+          </div>
+          <p className={styles.headerSignature}>Books for<br />the curious.</p>
+        </header>
+
+        <section className={styles.overview} aria-label="Profile overview">
+          <div className={styles.avatar} aria-hidden="true">{initials}</div>
+          <div className={styles.overviewDetails}>
+            <h2>{user?.name}</h2>
+            <p>{user?.email}</p>
+          </div>
+          {roleLabel && <span className={styles.accountLabel}>{roleLabel}</span>}
+          <button className={styles.logoutButton} type="button" onClick={signOut} disabled={logoutBusy}>
+            {logoutBusy ? 'Logging out…' : 'Log out'}
+          </button>
+        </section>
+        {logoutError && <p className={styles.logoutError} role="alert">{logoutError}</p>}
+
+        <div className={styles.dashboardGrid}>
+          <section className={styles.profilePanel} aria-labelledby="profile-details-title">
+            <header className={styles.panelHeading}>
+              <div>
+                <p className="eyebrow">Personal information</p>
+                <h2 id="profile-details-title">Profile details</h2>
+              </div>
+              <p className={styles.panelNote}>Your details stay connected to your account.</p>
+            </header>
+            <form className={`${styles.form} ${styles.profileForm}`} onSubmit={submitProfile} noValidate>
+              <Field id="vrinda-name" label="Full name" value={values.name} error={errors.name} autoComplete="name" onChange={value => change('name', value)} />
+              <Field id="vrinda-email" label="Email address" type="email" value={values.email} error={errors.email} autoComplete="email" onChange={value => change('email', value)} />
+              <Field id="vrinda-phone" label="Phone number" type="tel" value={values.phone} error={errors.phone} autoComplete="tel" hint="Optional" onChange={value => change('phone', value)} />
+              {errors.form && <p className={styles.error} role="alert">{errors.form}</p>}
+              {message && <p className={styles.success} role="status">{message}</p>}
+              <button className={styles.submit} type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save changes'} <span aria-hidden="true">↗</span></button>
+            </form>
+          </section>
+
+          <Link className={styles.ordersCard} to="/orders" aria-labelledby="orders-card-title">
+            <span className={styles.ordersIcon} aria-hidden="true">↗</span>
+            <p className={`eyebrow ${styles.ordersEyebrow}`}>Your reading life</p>
+            <h2 id="orders-card-title">Orders &amp; deliveries</h2>
+            <p className={styles.ordersCopy}>See your past orders and follow their journey home.</p>
+            <span className={styles.ordersAction}>View your orders <span aria-hidden="true">→</span></span>
+          </Link>
+        </div>
+      </div>
+    </main>;
+  }
 
   const submit = profile ? submitProfile : submitRegistration;
   return <main className={styles.page}>
@@ -140,4 +218,8 @@ function Field({ id, label, value, error, type = 'text', autoComplete, hint, onC
     {hint && <span className={styles.hint} id={`${id}-hint`}>{hint}</span>}
     {error && <span className={styles.fieldError} id={`${id}-error`} role="alert">{error}</span>}
   </div>;
+}
+
+function getInitials(name = '') {
+  return name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => [...part][0]).join('').toLocaleUpperCase();
 }
