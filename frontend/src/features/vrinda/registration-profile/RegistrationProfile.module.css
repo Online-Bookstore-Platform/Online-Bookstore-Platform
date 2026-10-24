@@ -1,0 +1,23 @@
+.page { min-height: 66vh; display: grid; place-items: center; padding: 72px 24px 100px; background: radial-gradient(ellipse at 78% 30%, #e9e6dc 0, transparent 38%), var(--paper); }
+.card { width: min(100%, 560px); padding: clamp(26px, 5vw, 54px); border: 1px solid var(--line); border-radius: 5px; background: #fffefa; box-shadow: 0 22px 60px -50px #302c1f; }
+.card h1 { margin: 14px 0; font: 450 clamp(2.45rem, 6vw, 4.1rem)/1 var(--serif); letter-spacing: -.055em; }
+.intro { margin: 0 0 28px; color: var(--muted); font-size: .94rem; line-height: 1.7; }
+.form { display: grid; gap: 18px; }
+.field { display: grid; gap: 7px; min-width: 0; }
+.field label { font-size: .78rem; font-weight: 600; }
+.field input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid #cecdc5; border-radius: 3px; background: #fffefa; color: var(--ink); font: inherit; font-size: .92rem; }
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.field input[aria-invalid='true'] { border-color: #982f26; }
+.hint { color: var(--muted); font-size: .76rem; }
+.fieldError,.error { margin: 0; color: #982f26; font-size: .82rem; line-height: 1.5; }
+.terms { display: flex; align-items: flex-start; gap: 10px; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+.terms input { margin: 3px 0 0; accent-color: var(--accent); }
+.success { margin: 0; padding: 12px 14px; border-left: 3px solid #57795e; background: #edf2eb; color: #34563b; font-size: .84rem; line-height: 1.5; }
+.submit { width: 100%; min-height: 52px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: white; font: inherit; font-size: .86rem; font-weight: 550; cursor: pointer; }
+.submit:hover:not(:disabled) { background: #41423b; }
+.submit:disabled { opacity: .55; cursor: not-allowed; }
+.footer { margin: 22px 0 0; color: var(--muted); font-size: .82rem; }
+.footer a { color: var(--ink); }
+.state { min-height: 58vh; padding: 70px 24px; display: grid; place-content: center; gap: 16px; color: var(--muted); }
+.state a { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .submit { transition: none; } }
