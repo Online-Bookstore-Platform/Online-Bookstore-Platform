@@ -1,0 +1,60 @@
+.page { max-width: 1228px; margin: 0 auto; padding: 64px 24px 110px; }
+.header { max-width: 720px; margin-bottom: 40px; }
+.header h1,.state h1 { margin: 14px 0 12px; font: 450 clamp(2.5rem, 6vw, 4.5rem)/1 var(--serif); letter-spacing: -.055em; }
+.header > p:last-child { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.7; }
+.back { display: inline-block; margin-bottom: 32px; color: var(--ink); font-size: .82rem; text-decoration: none; }
+.back:hover,.textLink:hover { text-decoration: underline; }
+.orderList { display: grid; gap: 14px; }
+.orderCard,.panel,.statusCard,.empty { padding: clamp(20px, 3vw, 32px); border: 1px solid var(--line); border-radius: 4px; background: #fffefa; }
+.orderMeta { display: flex; justify-content: space-between; align-items: baseline; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.orderMeta .eyebrow { margin: 0; }
+.orderMeta > span { color: var(--muted); font-size: .78rem; }
+.orderMain { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 17px; }
+.orderMain h2,.panel h2,.statusHead h2 { margin: 0; font: 450 1.55rem/1.15 var(--serif); }
+.orderMain p { margin: 6px 0 0; color: var(--muted); font-size: .82rem; }
+.orderMain a { flex: 0 0 auto; color: var(--ink); font-size: .82rem; text-decoration: none; }
+.orderMain a:hover { text-decoration: underline; }
+.empty { padding: clamp(28px, 6vw, 64px); }
+.empty h2 { max-width: 18ch; margin: 14px 0; font: 450 clamp(1.9rem, 4vw, 2.7rem)/1.08 var(--serif); letter-spacing: -.04em; }
+.empty > p:not(.eyebrow) { max-width: 480px; color: var(--muted); font-size: .9rem; line-height: 1.7; }
+.primaryLink { width: min(100%, 260px); min-height: 50px; margin-top: 24px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: #fff; font-size: .83rem; text-decoration: none; }
+.primaryLink:hover { background: #41423b; }
+.statusCard { margin-bottom: 22px; }
+.statusHead { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.statusHead .eyebrow { margin: 0 0 7px; }
+.badge { padding: 7px 10px; border-radius: 20px; background: #edf2eb; color: #34563b; font-size: .72rem; white-space: nowrap; }
+.stopped { background: #f6e7e4; color: #6e211a; }
+.progress { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 32px 0 12px; padding: 0; list-style: none; }
+.progress li { position: relative; display: grid; justify-items: start; gap: 9px; color: var(--muted); font-size: .72rem; line-height: 1.35; }
+.progress li::before { position: absolute; content: ''; left: 10px; right: -8px; top: 8px; height: 1px; background: var(--line); }
+.progress li:last-child::before { display: none; }
+.progress li.complete { color: var(--ink); }
+.stepDot,.historyDot { position: relative; z-index: 1; width: 17px; height: 17px; border: 1px solid #c8c6bc; border-radius: 50%; background: #fffefa; }
+.complete .stepDot { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 4px #fffefa; }
+.pendingNote { margin: 20px 0 0; padding: 13px 15px; border-left: 3px solid #b18a4d; background: #f6eedd; color: #5d4521; font-size: .8rem; line-height: 1.6; }
+.detailsGrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 22px; margin-bottom: 22px; }
+.panel .eyebrow { margin: 0 0 8px; }
+.panel h2 { margin-bottom: 18px; }
+.lineItems { margin: 0; padding: 0; list-style: none; }
+.lineItems li { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 13px 0; border-top: 1px solid var(--line); }
+.lineItems h3 { margin: 0; font: 500 1rem/1.35 var(--serif); }
+.lineItems p { margin: 5px 0 0; color: var(--muted); font-size: .78rem; }
+.lineItems strong { font-size: .85rem; white-space: nowrap; }
+.total { display: flex; justify-content: space-between; gap: 14px; padding-top: 16px; border-top: 1px solid var(--line); font-size: .9rem; }
+.panel address { color: var(--muted); font-size: .85rem; font-style: normal; line-height: 1.7; overflow-wrap: anywhere; }
+.history { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.historyEvent { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 13px; padding: 0 0 19px; }
+.historyEvent:not(:last-child)::before { position: absolute; top: 17px; bottom: -1px; left: 8px; width: 1px; background: var(--line); content: ''; }
+.historyDot { width: 17px; height: 17px; }
+.historyEvent h3 { margin: 0; font-size: .84rem; font-weight: 600; }
+.historyEvent p { margin: 4px 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.historyEvent time { color: var(--muted); font-size: .72rem; }
+.error,.message { color: #8a392c; font-size: .84rem; line-height: 1.6; }
+.error { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; border-left: 3px solid #982f26; background: #f6e7e4; }
+.error button { flex: 0 0 auto; border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.state { min-height: 58vh; padding: 70px 24px; display: grid; place-content: center; color: var(--muted); }
+.stateActions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 12px; }
+.stateActions button { min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: #fff; font: inherit; font-size: .83rem; cursor: pointer; }
+.state .textLink { color: var(--ink); }
+@media (max-width: 760px) { .detailsGrid { grid-template-columns: minmax(0, 1fr); }.progress { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 18px; }.progress li:nth-child(3)::before { display: none; } }
+@media (max-width: 520px) { .page { padding: 44px 20px 80px; }.orderMain { align-items: flex-start; flex-direction: column; }.orderMain h2 { font-size: 1.35rem; }.statusHead { align-items: flex-start; flex-direction: column; }.progress { grid-template-columns: repeat(2, minmax(0, 1fr)); }.progress li:nth-child(2)::before,.progress li:nth-child(4)::before { display: none; } }
