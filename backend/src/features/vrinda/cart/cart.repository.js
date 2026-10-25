@@ -61,7 +61,7 @@ export async function getCart(db, userId) {
 
 export async function findBookAvailability(db, bookId) {
   const [rows] = await db.query(
-    `SELECT b.id AS bookId, b.title, b.is_active AS isActive, COALESCE(i.quantity, 0) AS quantity
+    `SELECT b.id AS bookId, b.title, b.price, b.is_active AS isActive, COALESCE(i.quantity, 0) AS quantity
        FROM books b LEFT JOIN inventory i ON i.book_id = b.id WHERE b.id = ?`,
     [bookId]
   );

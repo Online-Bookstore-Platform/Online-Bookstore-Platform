@@ -73,7 +73,8 @@ export async function clearCart(db, cartId) {
 export async function listOrders(db, userId) {
   const [rows] = await db.query(
     `SELECT id, order_number AS orderNumber, status, total_amount AS totalAmount,
-            currency, created_at AS createdAt
+            currency, created_at AS createdAt,
+            (SELECT p.status FROM payments p WHERE p.order_id = orders.id ORDER BY p.id DESC LIMIT 1) AS paymentStatus
        FROM orders WHERE user_id = ? ORDER BY created_at DESC, id DESC`,
     [userId]
   );
@@ -106,6 +107,15 @@ export async function listStatusHistory(db, orderId) {
     `SELECT from_status AS fromStatus, to_status AS toStatus, note,
             created_at AS createdAt
        FROM order_status_history WHERE order_id = ? ORDER BY id`,
+    [orderId]
+  );
+  return rows;
+}
+
+export async function listPaymentAttempts(db, orderId) {
+  const [rows] = await db.query(
+    `SELECT status, amount, currency, created_at AS createdAt
+       FROM payments WHERE order_id = ? ORDER BY id`,
     [orderId]
   );
   return rows;

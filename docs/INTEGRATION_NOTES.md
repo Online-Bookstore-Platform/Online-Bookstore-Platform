@@ -8,7 +8,7 @@ Open Library has no retail price or storefront inventory, so those controls are 
 
 ## Reviews
 
-The review API is implemented under `GET/POST /api/books/:bookId/reviews`, plus owner-only `PATCH/DELETE` routes. It uses `works/OL…W` identifiers and the existing signed-in user session. Duplicate user/work reviews update in place. The API requires `book_reviews`; the isolated, non-destructive proposal is `backend/database/migrations/20261024_create_book_reviews.sql`. Uditi owns the shared schema/migration process and must review and integrate this migration before review persistence can be used. Do not claim persistence on a database where the migration has not been applied.
+The review API supports GET and POST /api/books/:bookId/reviews plus owner-only PATCH and DELETE. It accepts numeric local books.id values and stable Open Library work IDs. Customer reviews use the signed-in user session; demo reviews have explicit markers and no user or purchase record. New databases include book_reviews in backend/database/schema.sql; existing databases must apply the additive files listed in backend/database/migrations/README.md. Demo rows are excluded in production.
 
 ## Login and registration
 

@@ -6,8 +6,10 @@ import { createVrindaRouter } from './features/vrinda/index.js';
 import { createUditiRouter } from './features/uditi/index.js';
 import { createDatabaseCartReader } from './features/uditi/checkout/cart.reader.js';
 import { createReviewsRouter } from './features/varchas/book-details/reviews.routes.js';
+import { assertPresentationStoreEnvironment } from './features/uditi/catalogue/presentation-store.js';
 
 export function createApp({ repositories, pool, sessionSecret, sessionStore, env = process.env } = {}) {
+  assertPresentationStoreEnvironment(env);
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '32kb' }));
@@ -18,7 +20,7 @@ export function createApp({ repositories, pool, sessionSecret, sessionStore, env
   const userRepository = repositories?.users;
   app.use('/api', createVarchasRouter({ repositories, env }));
   const auth = createAuthMiddleware(userRepository || unavailableRepositories.users);
-  if (pool) app.use('/api/books', createReviewsRouter({ pool, requireAuth: auth.requireAuth }));
+  if (pool) app.use('/api/books', createReviewsRouter({ pool, requireAuth: auth.requireAuth, env }));
   app.use('/api', createVrindaRouter({ pool, requireAuth: auth.requireAuth }));
   app.use('/api', createUditiRouter({ pool, requireAuth: auth.requireAuth, requireAdmin: auth.requireAdmin, cartReader: pool ? createDatabaseCartReader(pool) : undefined }));
   app.use((_request, response) => response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found.' } }));

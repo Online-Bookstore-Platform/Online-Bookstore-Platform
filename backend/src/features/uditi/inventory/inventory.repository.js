@@ -9,7 +9,7 @@ import { LOW_STOCK_THRESHOLD, stockStatus } from './stock.js';
  */
 
 const STOCK_FROM = 'FROM books b JOIN inventory i ON i.book_id = b.id';
-const STOCK_COLUMNS = 'b.id AS book_id, b.title, b.author, b.isbn, b.is_active, i.quantity, i.updated_at';
+const STOCK_COLUMNS = 'b.id AS book_id, b.title, b.author, b.isbn, b.price, b.is_active, i.quantity, i.updated_at';
 
 function toStock(row) {
   return {
@@ -68,7 +68,7 @@ export async function getStock(db, bookId) {
  */
 export async function findAvailability(db, bookIds, { lock = false } = {}) {
   const [rows] = await db.query(
-    `SELECT b.id, b.title, b.is_active, COALESCE(i.quantity, 0) AS quantity
+    `SELECT b.id, b.title, b.price, b.is_active, COALESCE(i.quantity, 0) AS quantity
        FROM books b LEFT JOIN inventory i ON i.book_id = b.id
       WHERE b.id IN (?) ${lock ? 'FOR SHARE OF b, i' : ''}`,
     [bookIds]

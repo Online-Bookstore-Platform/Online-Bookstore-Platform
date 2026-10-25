@@ -6,9 +6,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --env-file=.env --watch src/server.js",
-    "test": "node --test",
+    "test": "node --env-file=.env --test",
     "db:setup": "node --env-file=.env database/setup.js",
-    "db:reset": "node --env-file=.env database/setup.js --reset"
+    "db:reset": "node --env-file=.env database/setup.js --reset",
+    "reviews:seed": "node --env-file=.env database/seed-demo-reviews.js",
+    "reviews:clear": "node --env-file=.env database/seed-demo-reviews.js --clear"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

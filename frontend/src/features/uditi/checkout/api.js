@@ -7,22 +7,26 @@ export const saveDelivery = details => apiRequest('/api/checkout/delivery', { me
 export const ORDER_SERVICE_UNAVAILABLE = 'ORDER_SERVICE_UNAVAILABLE';
 
 /**
- * ORDER-DRAFT CONTRACT (proposed - not yet documented by the order feature, owned by Vrinda):
+ * ORDER-DRAFT CONTRACT (implemented by the order feature):
  *   POST /api/orders   { delivery }   ->   201 { order: { id, orderNumber, totalAmount, ... } }
  * The order is built on the server from the signed-in user's cart at current prices. Payment
  * then continues on Varchas's /payment?orderId=<id>. If the order service is not connected the
- * server answers 404 (unknown endpoint) or 503; that is reported honestly, never as success.
+ * A browser-session idempotency key makes retries safe if the response is interrupted.
  */
 export async function createOrderDraft(delivery) {
   let result;
+  const keyName = 'folio.order-draft-idempotency-key';
+  const idempotencyKey = sessionStorage.getItem(keyName) || crypto.randomUUID();
+  sessionStorage.setItem(keyName, idempotencyKey);
   try {
-    result = await apiRequest('/api/orders', { method: 'POST', body: { delivery } });
+    result = await apiRequest('/api/orders', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: { delivery } });
   } catch (error) {
     throw orderServiceProblem(error);
   }
   if (result?.order?.id === undefined || result?.order?.id === null) {
     throw new ApiError(502, 'ORDER_INVALID', 'The order service answered without an order. Please try again.');
   }
+  sessionStorage.removeItem(keyName);
   return result.order;
 }
 

@@ -82,6 +82,7 @@ async function findShortages(db, lines, { lock = false } = {}) {
     const row = byId.get(bookId);
     if (!row) shortages.push(describeShortage({ bookId, title: null, requested, available: 0, active: false }));
     else if (!row.is_active) shortages.push(describeShortage({ bookId, title: row.title, requested, available: 0, active: false }));
+    else if (row.price !== undefined && (!Number.isFinite(Number(row.price)) || Number(row.price) <= 0)) shortages.push(describeShortage({ bookId, title: row.title, requested, available: 0, active: true }));
     else if (row.quantity < requested) shortages.push(describeShortage({ bookId, title: row.title, requested, available: row.quantity, active: true }));
   }
   return shortages;

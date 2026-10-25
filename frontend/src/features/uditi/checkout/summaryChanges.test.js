@@ -1,4 +1,4 @@
-import { describe, it, afterEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { describeSummaryChanges, stockProblems } from './summaryChanges.js';
 import { ORDER_SERVICE_UNAVAILABLE, createOrderDraft, orderServiceProblem, paymentPath } from './api.js';
@@ -39,8 +39,22 @@ describe('describeSummaryChanges', () => {
 
 describe('order-draft hand-off', () => {
   const realFetch = globalThis.fetch;
+  const realSessionStorage = globalThis.sessionStorage;
+  const storageKey = 'folio.order-draft-idempotency-key';
+  class SessionStorageMock {
+    #values = new Map();
+    get length() { return this.#values.size; }
+    key(index) { return [...this.#values.keys()][index] ?? null; }
+    getItem(key) { return this.#values.get(String(key)) ?? null; }
+    setItem(key, value) { this.#values.set(String(key), String(value)); }
+    removeItem(key) { this.#values.delete(String(key)); }
+    clear() { this.#values.clear(); }
+  }
+  beforeEach(() => { globalThis.sessionStorage = new SessionStorageMock(); });
   afterEach(() => {
     globalThis.fetch = realFetch;
+    if (realSessionStorage === undefined) delete globalThis.sessionStorage;
+    else globalThis.sessionStorage = realSessionStorage;
   });
   const answer = (status, body) => async () => ({ status, ok: status < 300, json: async () => body });
 
@@ -50,6 +64,8 @@ describe('order-draft hand-off', () => {
     const order = await createOrderDraft({ city: 'Pune' });
     assert.equal(sent.path, '/api/orders');
     assert.deepEqual(JSON.parse(sent.options.body), { delivery: { city: 'Pune' } });
+    assert.ok(sent.options.headers['Idempotency-Key']);
+    assert.equal(globalThis.sessionStorage.getItem(storageKey), null);
     assert.equal(paymentPath(order), '/payment?orderId=42');
     assert.equal(paymentPath({ id: 'a b' }), '/payment?orderId=a%20b');
   });
