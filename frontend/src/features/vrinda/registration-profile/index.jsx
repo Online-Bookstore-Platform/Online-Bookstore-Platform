@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, loginPath } from '../../uditi/shared/api.js';
-import { fieldErrors, getProfile, registerCustomer, updateProfile } from '../api.js';
+import { fieldErrors, getOrders, getProfile, registerCustomer, updateProfile } from '../api.js';
 import { logout } from '../../varchas/api.js';
 import styles from './RegistrationProfile.module.css';
 
@@ -19,6 +19,7 @@ export default function RegistrationProfilePage({ profile = false }) {
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [logoutError, setLogoutError] = useState('');
   const [loading, setLoading] = useState(profile);
+  const [ordersInfo, setOrdersInfo] = useState({ status: 'loading', items: [] });
   const [reloadKey, setReloadKey] = useState(0);
   const navigate = useNavigate();
 
@@ -37,6 +38,15 @@ export default function RegistrationProfilePage({ profile = false }) {
     }).finally(() => setLoading(false));
     return () => controller.abort();
   }, [profile, navigate, reloadKey]);
+
+  useEffect(() => {
+    if (!profile || !user?.id) return undefined;
+    const controller = new AbortController();
+    setOrdersInfo({ status: 'loading', items: [] });
+    getOrders(controller.signal).then(items => setOrdersInfo({ status: 'ready', items }))
+      .catch(error => { if (error.name !== 'AbortError') setOrdersInfo({ status: 'error', items: [] }); });
+    return () => controller.abort();
+  }, [profile, user?.id]);
 
   function change(field, value) {
     setValues(current => ({ ...current, [field]: value }));
@@ -174,6 +184,9 @@ export default function RegistrationProfilePage({ profile = false }) {
             <p className={`eyebrow ${styles.ordersEyebrow}`}>Your reading life</p>
             <h2 id="orders-card-title">Orders &amp; deliveries</h2>
             <p className={styles.ordersCopy}>See your past orders and follow their journey home.</p>
+            {ordersInfo.status === 'ready' && (ordersInfo.items[0]
+              ? <p className={styles.orderSnapshot}>Most recent · <strong>{ordersInfo.items[0].orderNumber}</strong><br />{ordersInfo.items[0].status.replaceAll('_', ' ')} · {new Intl.NumberFormat('en-IN', { style: 'currency', currency: ordersInfo.items[0].currency || 'INR' }).format(ordersInfo.items[0].totalAmount)}</p>
+              : <p className={styles.orderSnapshot}>No orders yet. Your order history will appear here after your first purchase.</p>)}
             <span className={styles.ordersAction}>View your orders <span aria-hidden="true">→</span></span>
           </Link>
         </div>

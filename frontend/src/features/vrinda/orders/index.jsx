@@ -89,6 +89,7 @@ export default function OrdersPage({ tracking = false }) {
           })}
         </ol>}
         {(order.status === 'pending' || order.status === 'payment_failed') && <p className={styles.pendingNote}>Your order is waiting for payment confirmation. Order status will update when the payment service confirms it.</p>}
+        <p className={styles.paymentStatus}>Payment status: <strong>{order.paymentAttempts?.length ? order.paymentAttempts.at(-1).status.replaceAll('_', ' ') : 'not started'}</strong></p>
         {(order.status === 'cancelled' || order.status === 'payment_failed') && <ol className={styles.history} aria-label="Order status history">
           {history.map((event, index) => <HistoryEvent key={`${event.toStatus}-${index}`} event={event} />)}
         </ol>}
@@ -133,7 +134,7 @@ export default function OrdersPage({ tracking = false }) {
       : <section className={styles.orderList} aria-label="Your orders">
         {orders.map(item => <article className={styles.orderCard} key={item.id}>
           <div className={styles.orderMeta}><p className="eyebrow">Order {item.orderNumber}</p><span>{date(item.createdAt)}</span></div>
-          <div className={styles.orderMain}><div><h2>{STATUSES[item.status] ?? item.status}</h2><p>{money(item.totalAmount)} <span>·</span> {item.currency}</p></div><Link to={`/orders/${item.id}`}>Track order <span aria-hidden="true">↗</span></Link></div>
+          <div className={styles.orderMain}><div><h2>{STATUSES[item.status] ?? item.status}</h2><p>{money(item.totalAmount)} <span>·</span> {item.currency}</p><p>Payment: {item.paymentStatus ? item.paymentStatus.replaceAll('_', ' ') : 'not started'}</p></div><Link to={`/orders/${item.id}`}>Track order <span aria-hidden="true">↗</span></Link></div>
         </article>)}
       </section>}
   </main>;

@@ -73,6 +73,23 @@ test('order detail lookup is scoped to the current customer', async () => {
   assert.deepEqual(parameters, [44, 72]);
 });
 
+test('saved payment attempts are returned with an owned order', async () => {
+  const service = createOrdersService({
+    pool: {
+      async query(sql) {
+        if (sql.startsWith('SELECT id, order_number AS orderNumber')) return [[{ id: 72, orderNumber: 'order-72', status: 'paid', totalAmount: 25, currency: 'INR' }]];
+        if (sql.startsWith('SELECT status, amount, currency, created_at AS createdAt')) return [[{ status: 'succeeded', amount: 25, currency: 'INR' }]];
+        return [[]];
+      },
+    },
+    checkAvailability: async () => ({ ok: true, shortages: [] }),
+    withTransaction: (_pool, work) => work(),
+  });
+
+  const { order } = await service.tracking(8, 72);
+  assert.deepEqual(order.paymentAttempts, [{ status: 'succeeded', amount: 25, currency: 'INR' }]);
+});
+
 test('successful payment updates status and deducts stock inside the supplied transaction', async () => {
   const statements = [];
   const db = {
@@ -95,9 +112,12 @@ test('successful payment updates status and deducts stock inside the supplied tr
     },
   });
 
-  const result = await service.recordPaymentStatus({ orderId: 21, customerId: 8, paymentId: 15, paymentStatus: 'succeeded' });
+  const result = await service.recordPaymentStatus({
+    orderId: 21, customerId: 8, paymentId: 15, paymentStatus: 'succeeded',
+    paymentUpdate: async connection => { assert.equal(connection, db); return { status: 'succeeded' }; },
+  });
 
-  assert.deepEqual(result, { orderId: 21, status: 'paid' });
+  assert.deepEqual(result, { orderId: 21, status: 'paid', paymentAttempt: { status: 'succeeded' } });
   assert.deepEqual(deducted, [{ bookId: 3, quantity: 2 }]);
   assert.ok(statements.some(statement => statement.sql.startsWith('INSERT INTO order_status_history') && statement.params[1] === 'pending' && statement.params[2] === 'paid'));
 });

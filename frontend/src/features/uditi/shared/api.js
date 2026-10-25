@@ -29,14 +29,17 @@ export const isAbort = error => error?.name === 'AbortError';
  * @param {string} path  e.g. '/api/catalogue/books?page=2'
  * @param {{ method?: string, body?: unknown, signal?: AbortSignal }} [options]
  */
-export async function apiRequest(path, { method = 'GET', body, signal } = {}) {
+export async function apiRequest(path, { method = 'GET', body, signal, headers } = {}) {
   let response;
   try {
     response = await fetch(path, {
       method,
       signal,
       credentials: 'same-origin',
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers: body === undefined && headers === undefined ? undefined : {
+        ...headers,
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {

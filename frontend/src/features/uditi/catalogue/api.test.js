@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe('add to cart', () => {
   it('allows cart use only for a complete local INR product record', () => {
-    const book = { storeProduct: { id: 7, price: 249, currency: 'INR', stockStatus: 'low_stock', available: true } };
+    const book = { storeProduct: { id: 73, price: 249, currency: 'INR', stockStatus: 'low_stock', available: true } };
     assert.equal(isPurchasable(book), true);
     assert.equal(isPurchasable({}), false);
     assert.equal(isPurchasable({ storeProduct: { ...book.storeProduct, id: '7' } }), false);
@@ -19,12 +19,13 @@ describe('add to cart', () => {
   });
 
   it('posts one copy of the book to the cart API (not a local cart)', async () => {
+    const book = { storeProduct: { id: 73 } };
     let seen;
     globalThis.fetch = async (path, options) => ((seen = { path, options }), { status: 201, ok: true, json: async () => ({}) });
-    await addToCart(7);
+    await addToCart(book.storeProduct.id);
     assert.equal(seen.path, '/api/cart/items');
     assert.equal(seen.options.method, 'POST');
-    assert.deepEqual(JSON.parse(seen.options.body), { bookId: 7, quantity: 1 });
+    assert.deepEqual(JSON.parse(seen.options.body), { bookId: 73, quantity: 1 });
   });
 
   it('explains what to do when signed out, or when the cart service is not connected', () => {

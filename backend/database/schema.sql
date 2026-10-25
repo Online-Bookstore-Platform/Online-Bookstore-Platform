@@ -80,7 +80,8 @@ CREATE TABLE categories (
 -- -----------------------------------------------------------------------------
 CREATE TABLE books (
   id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  isbn            VARCHAR(13)     NOT NULL,
+  isbn            VARCHAR(13)     NULL,
+  open_library_work_id VARCHAR(32) NULL,
   title           VARCHAR(255)    NOT NULL,
   author          VARCHAR(150)    NOT NULL,
   category_id     INT UNSIGNED    NOT NULL,
@@ -92,6 +93,7 @@ CREATE TABLE books (
   updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_books_isbn (isbn),
+  UNIQUE KEY uq_books_open_library_work_id (open_library_work_id),
   KEY idx_books_title (title),
   KEY idx_books_author (author),
   KEY idx_books_category_price (category_id, price),
@@ -99,7 +101,22 @@ CREATE TABLE books (
   CONSTRAINT fk_books_category FOREIGN KEY (category_id) REFERENCES categories (id)
     ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT chk_books_price CHECK (price >= 0),
-  CONSTRAINT chk_books_isbn  CHECK (isbn REGEXP '^([0-9]{9}[0-9Xx]|[0-9]{13})$')
+  CONSTRAINT chk_books_isbn  CHECK (isbn IS NULL OR isbn REGEXP '^([0-9]{9}[0-9Xx]|[0-9]{13})$'),
+  CONSTRAINT chk_books_open_library_work_id CHECK (open_library_work_id IS NULL OR open_library_work_id REGEXP '^works/OL[0-9]+W$')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Stable provider identity mapping for local presentation products. Explicit
+-- Folio products can be mapped here by verified ISBN without changing their data.
+CREATE TABLE presentation_products (
+  provider VARCHAR(20) NOT NULL,
+  provider_id VARCHAR(120) NOT NULL,
+  book_id BIGINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (provider, provider_id),
+  KEY idx_presentation_products_book (book_id),
+  CONSTRAINT fk_presentation_products_book FOREIGN KEY (book_id) REFERENCES books (id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT chk_presentation_products_provider CHECK (provider IN ('openlibrary', 'googlebooks'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
@@ -276,6 +293,39 @@ CREATE TABLE order_status_history (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
+-- book_reviews: customer feedback for local products and provider discovery
+-- records. Demo-only rows have no user identity or purchase claim.
+-- -----------------------------------------------------------------------------
+CREATE TABLE book_reviews (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  book_id VARCHAR(80) NOT NULL COMMENT 'Local key local:<books.id> or provider work ID',
+  local_book_id BIGINT UNSIGNED NULL,
+  user_id BIGINT UNSIGNED NULL,
+  is_demo TINYINT(1) NOT NULL DEFAULT 0,
+  demo_label VARCHAR(80) NULL,
+  demo_key VARCHAR(120) NULL,
+  rating TINYINT UNSIGNED NOT NULL,
+  content VARCHAR(2000) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_book_reviews_book_user (book_id, user_id),
+  UNIQUE KEY uq_book_reviews_demo_key (demo_key),
+  KEY idx_book_reviews_book_created (book_id, created_at),
+  KEY idx_book_reviews_local_created (local_book_id, created_at),
+  CONSTRAINT fk_book_reviews_user FOREIGN KEY (user_id) REFERENCES users (id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT fk_book_reviews_local_book FOREIGN KEY (local_book_id) REFERENCES books (id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT chk_book_reviews_rating CHECK (rating BETWEEN 1 AND 5),
+  CONSTRAINT chk_book_reviews_content CHECK (CHAR_LENGTH(TRIM(content)) BETWEEN 10 AND 2000),
+  CONSTRAINT chk_book_reviews_kind CHECK (
+    (is_demo = 0 AND demo_key IS NULL AND demo_label IS NULL)
+    OR (is_demo = 1 AND demo_key IS NOT NULL AND demo_label IS NOT NULL)
+  )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- -----------------------------------------------------------------------------
 -- payments: one row per payment ATTEMPT (an order may have several: a declined
 -- attempt can be retried). Status values are exactly the outcomes of the
 -- payment feature (Varchas): pending, succeeded, failed, cancelled, timed_out.
@@ -298,6 +348,7 @@ CREATE TABLE payments (
   status             ENUM('pending', 'succeeded', 'failed', 'cancelled', 'timed_out')
                      NOT NULL DEFAULT 'pending',
   provider_reference VARCHAR(100)    NULL,
+  provider_order_id  VARCHAR(100)    NULL,
   created_at         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   active_order_id    BIGINT UNSIGNED
@@ -307,6 +358,7 @@ CREATE TABLE payments (
   PRIMARY KEY (id),
   UNIQUE KEY uq_payments_idempotency (idempotency_key),
   UNIQUE KEY uq_payments_provider_reference (provider_reference),
+  UNIQUE KEY uq_payments_provider_order (provider_order_id),
   UNIQUE KEY uq_payments_one_pending_per_order (active_order_id),
   UNIQUE KEY uq_payments_one_success_per_order (succeeded_order_id),
   KEY idx_payments_order (order_id),

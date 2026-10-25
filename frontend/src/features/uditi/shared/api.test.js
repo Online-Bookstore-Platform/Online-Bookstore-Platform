@@ -14,11 +14,12 @@ describe('apiRequest', () => {
   it('returns the parsed body and sends JSON with cookies', async () => {
     let seen;
     globalThis.fetch = async (path, options) => ((seen = { path, options }), respond(200, { ok: true })());
-    assert.deepEqual(await apiRequest('/api/x', { method: 'PUT', body: { a: 1 } }), { ok: true });
+    assert.deepEqual(await apiRequest('/api/x', { method: 'PUT', body: { a: 1 }, headers: { 'Idempotency-Key': 'stable-key' } }), { ok: true });
     assert.equal(seen.options.method, 'PUT');
     assert.equal(seen.options.credentials, 'same-origin');
     assert.equal(seen.options.body, '{"a":1}');
     assert.equal(seen.options.headers['Content-Type'], 'application/json');
+    assert.equal(seen.options.headers['Idempotency-Key'], 'stable-key');
   });
 
   it('turns an error body into an ApiError with the backend message and details', async () => {

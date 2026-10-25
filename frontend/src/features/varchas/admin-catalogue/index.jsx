@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import AdminOnly from '../authentication/AdminOnly.jsx';
 import { apiRequest, logout } from '../api.js';
 import styles from './AdminCatalogue.module.css';
 
-const emptyBook = { title: '', author: '', isbn: '', category: '', description: '', price: '', coverImageUrl: '' };
+const emptyBook = { title: '', author: '', isbn: '', openLibraryWorkId: '', category: '', description: '', price: '', coverImageUrl: '' };
 
-function CatalogueManager() {
+function CatalogueManager({ discoveredBook }) {
   const [books, setBooks] = useState([]);
   const [form, setForm] = useState(emptyBook);
   const [editingId, setEditingId] = useState(null);
@@ -13,6 +14,7 @@ function CatalogueManager() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -28,6 +30,13 @@ function CatalogueManager() {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!discoveredBook?.title) return;
+    setEditingId(null);
+    setForm({ ...emptyBook, title: discoveredBook.title || '', author: discoveredBook.author || '', isbn: discoveredBook.isbn || '', openLibraryWorkId: discoveredBook.openLibraryWorkId || '', category: discoveredBook.category || '', description: discoveredBook.description || '', coverImageUrl: discoveredBook.coverImageUrl || '' });
+    setMessage('Verified discovery metadata is prefilled. Enter Folio’s actual price; new products start with zero stock.');
+  }, [discoveredBook]);
+  const visibleBooks = books.filter(book => `${book.title} ${book.author} ${book.isbn || ''} ${book.category || ''}`.toLowerCase().includes(search.trim().toLowerCase()));
 
   function editBook(book) {
     setEditingId(book.id);
@@ -44,8 +53,8 @@ function CatalogueManager() {
     setMessage('');
     setError('');
     const payload = { ...form, price: Number(form.price) };
-    if (Object.entries(form).some(([field, value]) => field !== 'coverImageUrl' && !value.trim()) || !Number.isFinite(payload.price) || payload.price < 0) {
-      setError('Complete each field with a valid non-negative price.');
+    if (Object.entries(form).some(([field, value]) => !['coverImageUrl', 'isbn', 'openLibraryWorkId'].includes(field) && !value.trim()) || !Number.isFinite(payload.price) || payload.price <= 0) {
+      setError('Complete each field with an actual price greater than zero. Stock is configured separately in Inventory.');
       return;
     }
     setSaving(true);
@@ -80,7 +89,7 @@ function CatalogueManager() {
 
   return <section className={styles.page}><div className={styles.heading}><div><p className="eyebrow">Administrator · Story #11</p><h1>Catalogue studio.</h1><p>Manage book details and prices. Stock quantities belong to the inventory feature.</p></div><button className={styles.signout} type="button" onClick={signOut}>Sign out</button></div>
     <form className={styles.form} onSubmit={submit}><div className={styles.formHeading}><h2>{editingId ? 'Edit a book' : 'Add a book'}</h2>{editingId && <button type="button" className={styles.cancel} onClick={resetForm}>Cancel editing</button>}</div>
-      <div className={styles.fields}>{[['title', 'Title'], ['author', 'Author'], ['isbn', 'ISBN'], ['category', 'Category'], ['price', 'Price (INR)'], ['coverImageUrl', 'Cover image URL']].map(([key, label]) => <label key={key}>{label}<input required={key !== 'coverImageUrl'} name={key} type={key === 'price' ? 'number' : key === 'coverImageUrl' ? 'url' : 'text'} min={key === 'price' ? '0' : undefined} step={key === 'price' ? '0.01' : undefined} value={form[key]} onChange={event => setForm(current => ({ ...current, [key]: event.target.value }))} /></label>)}
+      <div className={styles.fields}>{[['title', 'Title'], ['author', 'Author'], ['isbn', 'ISBN (optional)'], ['category', 'Category'], ['price', 'Price (INR)'], ['coverImageUrl', 'Cover image URL']].map(([key, label]) => <label key={key}>{label}<input required={!['coverImageUrl', 'isbn'].includes(key)} name={key} type={key === 'price' ? 'number' : key === 'coverImageUrl' ? 'url' : 'text'} min={key === 'price' ? '0.01' : undefined} step={key === 'price' ? '0.01' : undefined} value={form[key]} onChange={event => setForm(current => ({ ...current, [key]: event.target.value }))} /></label>)}
         <label className={styles.full}>Description<textarea required name="description" rows="4" value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} /></label>
       </div>
       {message && <p className={styles.success} role="status">{message}</p>}{error && <p className={styles.error} role="alert">{error}</p>}
@@ -88,8 +97,9 @@ function CatalogueManager() {
     </form>
     <div className={styles.listHeader}><h2>Current books</h2><button type="button" onClick={refresh} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button></div>
     {error && !books.length && <p className={styles.error} role="alert">{error}</p>}
-    {loading ? <p className={styles.empty} aria-live="polite">Loading catalogue…</p> : books.length ? <div className={styles.tableWrap}><table><thead><tr><th scope="col">Book</th><th scope="col">ISBN</th><th scope="col">Category</th><th scope="col">Price</th><th scope="col"><span className="visually-hidden">Actions</span></th></tr></thead><tbody>{books.map(book => <tr key={book.id}><td><strong>{book.title}</strong><small>{book.author}</small></td><td>{book.isbn || '—'}</td><td>{book.category || '—'}</td><td>{book.price == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: book.currency || 'INR' }).format(Number(book.price))}</td><td className={styles.actions}><button type="button" onClick={() => editBook(book)}>Edit</button><button type="button" onClick={() => removeBook(book)}>Remove</button></td></tr>)}</tbody></table></div> : <p className={styles.empty}>No books found yet.</p>}
+    <label className={styles.search}>Search catalogue<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Title, author, ISBN or category" /></label>
+    {loading ? <p className={styles.empty} aria-live="polite">Loading catalogue…</p> : visibleBooks.length ? <div className={styles.tableWrap}><table><thead><tr><th scope="col">Book</th><th scope="col">ISBN</th><th scope="col">Category</th><th scope="col">Price</th><th scope="col"><span className="visually-hidden">Actions</span></th></tr></thead><tbody>{visibleBooks.map(book => <tr key={book.id}><td><strong>{book.title}</strong><small>{book.author}{book.isActive === false && ' · Inactive'}</small></td><td>{book.isbn || '—'}</td><td>{book.category || '—'}</td><td>{book.price == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: book.currency || 'INR' }).format(Number(book.price))}</td><td className={styles.actions}><button type="button" onClick={() => editBook(book)}>Edit</button><button type="button" disabled={book.isActive === false} onClick={() => removeBook(book)}>{book.isActive === false ? 'Removed' : 'Remove'}</button></td></tr>)}</tbody></table></div> : <p className={styles.empty}>{books.length ? 'No books match that search.' : 'No books found yet.'}</p>}
   </section>;
 }
 
-export default function AdminCataloguePage() { return <AdminOnly><CatalogueManager /></AdminOnly>; }
+export default function AdminCataloguePage() { const location = useLocation(); return <AdminOnly><CatalogueManager discoveredBook={location.state?.discoveredBook} /></AdminOnly>; }

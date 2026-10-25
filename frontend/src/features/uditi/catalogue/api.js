@@ -7,7 +7,7 @@ export const fetchFilterOptions = signal => apiRequest('/api/catalogue/filters',
 export function isPurchasable(book) {
   const product = book?.storeProduct;
   return Number.isSafeInteger(product?.id) && product.id > 0
-    && typeof product.price === 'number' && Number.isFinite(product.price) && product.price >= 0
+    && typeof product.price === 'number' && Number.isFinite(product.price) && product.price > 0
     && product.currency === 'INR'
     && ['in_stock', 'low_stock', 'out_of_stock'].includes(product.stockStatus)
     && typeof product.available === 'boolean';
@@ -27,9 +27,9 @@ export function friendlyCartError(error) {
 }
 
 /** Add one copy of a book through the cart API (POST /api/cart/items { bookId, quantity }). */
-export async function addToCart(bookId) {
+export async function addToCart(bookId, quantity = 1) {
   try {
-    await apiRequest('/api/cart/items', { method: 'POST', body: { bookId, quantity: 1 } });
+    await apiRequest('/api/cart/items', { method: 'POST', body: { bookId, quantity } });
   } catch (error) {
     throw friendlyCartError(error);
   }

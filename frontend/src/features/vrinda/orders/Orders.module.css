@@ -32,6 +32,7 @@
 .stepDot,.historyDot { position: relative; z-index: 1; width: 17px; height: 17px; border: 1px solid #c8c6bc; border-radius: 50%; background: #fffefa; }
 .complete .stepDot { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 4px #fffefa; }
 .pendingNote { margin: 20px 0 0; padding: 13px 15px; border-left: 3px solid #b18a4d; background: #f6eedd; color: #5d4521; font-size: .8rem; line-height: 1.6; }
+.paymentStatus { margin: 18px 0 0; color: var(--muted); font-size: .82rem; }.paymentStatus strong { color: var(--ink); text-transform: capitalize; }
 .detailsGrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 22px; margin-bottom: 22px; }
 .panel .eyebrow { margin: 0 0 8px; }
 .panel h2 { margin-bottom: 18px; }

@@ -23,14 +23,16 @@ function validateSavedDelivery(delivery) {
 async function getOrderDetails(db, userId, orderId) {
   const order = await repository.findOrder(db, userId, orderId);
   if (!order) throw notFound('We could not find that order.', 'ORDER_NOT_FOUND');
-  const [items, statusHistory] = await Promise.all([
+  const [items, statusHistory, paymentAttempts] = await Promise.all([
     repository.listOrderItems(db, order.id),
     repository.listStatusHistory(db, order.id),
+    repository.listPaymentAttempts(db, order.id),
   ]);
   return {
     ...order,
     items: items.map(item => ({ ...item, lineTotal: lineTotal(item.unitPrice, item.quantity) })),
     statusHistory,
+    paymentAttempts,
   };
 }
 
@@ -91,28 +93,27 @@ export function createOrdersService({ pool, checkAvailability, withTransaction, 
     },
 
     async tracking(userId, orderId) {
-      const order = await repository.findOrder(pool, userId, orderId);
-      if (!order) throw notFound('We could not find that order.', 'ORDER_NOT_FOUND');
-      return { order, statusHistory: await repository.listStatusHistory(pool, order.id) };
+      const order = await getOrderDetails(pool, userId, orderId);
+      return { order, statusHistory: order.statusHistory };
     },
 
     getPayableOrder(orderId, customerId) {
       return repository.getPayableOrder(pool, orderId, customerId);
     },
 
-    async recordPaymentStatus({ orderId, customerId, paymentId, paymentStatus }) {
+    async recordPaymentStatus({ orderId, customerId, paymentId, paymentStatus, paymentUpdate }) {
       const nextStatus = paymentStatus === 'succeeded' ? 'paid' : 'payment_failed';
       if (!['pending', 'succeeded', 'failed', 'cancelled', 'timed_out'].includes(paymentStatus)) {
         throw new HttpError(400, 'INVALID_PAYMENT_STATUS', 'The payment status is not supported.');
       }
-      if (paymentStatus === 'pending') return;
+      if (paymentStatus === 'pending') return paymentUpdate ? { paymentAttempt: await paymentUpdate(pool) } : undefined;
 
       return withTransaction(pool, async connection => {
         const order = await repository.findOrderForUpdate(connection, customerId, orderId);
         if (!order) throw notFound('We could not find that order.', 'ORDER_NOT_FOUND');
 
-        if (order.status === 'paid' && paymentStatus === 'succeeded') return;
-        if (order.status === 'payment_failed' && paymentStatus !== 'succeeded') return;
+        if (order.status === 'paid' && paymentStatus === 'succeeded') return paymentUpdate ? { paymentAttempt: await paymentUpdate(connection) } : undefined;
+        if (order.status === 'payment_failed' && paymentStatus !== 'succeeded') return paymentUpdate ? { paymentAttempt: await paymentUpdate(connection) } : undefined;
         if (!['pending', 'payment_failed'].includes(order.status)) {
           throw new HttpError(409, 'ORDER_NOT_PAYABLE', 'This order can no longer receive a payment status update.');
         }
@@ -133,7 +134,8 @@ export function createOrdersService({ pool, checkAvailability, withTransaction, 
             ? `Payment ${paymentId} confirmed.`
             : `Payment ${paymentId} ${paymentStatus}.`,
         });
-        return { orderId: order.id, status: nextStatus };
+        const paymentAttempt = paymentUpdate ? await paymentUpdate(connection) : null;
+        return { orderId: order.id, status: nextStatus, ...(paymentUpdate ? { paymentAttempt } : {}) };
       });
     },
   };
@@ -145,12 +147,13 @@ export function createVrindaOrderService({ pool, withTransaction = runTransactio
     getPayableOrder(orderId, customerId) {
       return orders.getPayableOrder(orderId, customerId);
     },
-    recordPaymentStatus({ orderId, customerId, paymentId, paymentStatus }) {
+    recordPaymentStatus({ orderId, customerId, paymentId, paymentStatus, paymentUpdate }) {
       return orders.recordPaymentStatus({
         orderId,
         customerId,
         paymentId,
         paymentStatus,
+        paymentUpdate,
       });
     },
   };

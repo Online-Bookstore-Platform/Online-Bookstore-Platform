@@ -62,6 +62,7 @@ sessions (stand-alone, for a persistent express-session store)
 | `order_items` | books of an order | Vrinda | unique `(order_id, book_id)`, `quantity > 0`, **`unit_price` and `book_title` are snapshots** (a later price change never alters an order) |
 | `order_status_history` | every status change | Vrinda | `from_status` NULL for the first entry, `changed_by` NULL = system |
 | `payments` | one row per payment **attempt** | Varchas | see below |
+| `book_reviews` | customer feedback and explicit demo examples | Varchas | local reviews reference `books.id`; provider reviews use work IDs; demo rows have no customer identity |
 
 Orders and payments are never cascade-deleted with their user or books (`ON DELETE RESTRICT`). Carts, cart items, delivery details and inventory are removed with their owner.
 
@@ -113,3 +114,11 @@ Orders and payments are never cascade-deleted with their user or books (`ON DELE
 ## Tests
 
 `npm test` in `backend/` includes `test/uditi/schema.test.js` (every constraint above, the setup script, the seed data). It creates and drops a throw-away database named `bookstore_test_*` using the `DB_*` settings, so that user needs `CREATE`/`DROP`. If MySQL is not reachable those tests are skipped with the reason shown.
+# Presentation products
+
+When `CATALOGUE_DEMO_MODE=true` in local development, provider records are mapped
+to local `books.id` values through `presentation_products`. Apply
+`migrations/20261027_create_presentation_products.sql` to an existing database
+(or recreate it with `npm run db:reset`) before starting the backend. A provider
+ID is unique per provider; generated books receive one persistent inventory row
+at creation and are never replenished on catalogue refresh.

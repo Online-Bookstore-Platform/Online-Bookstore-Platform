@@ -30,6 +30,7 @@ describe('database schema (#13)', databaseTests, () => {
     const [rows] = await db.query('SHOW TABLES');
     const tables = rows.map(row => Object.values(row)[0]).sort();
     assert.deepEqual(tables, [
+      'book_reviews',
       'books',
       'cart_items',
       'carts',
@@ -41,9 +42,28 @@ describe('database schema (#13)', databaseTests, () => {
       'order_status_history',
       'orders',
       'payments',
+      'presentation_products',
       'sessions',
       'users',
     ]);
+  });
+
+  describe('book reviews', () => {
+    it('supports local customer reviews and user-less demo reviews with explicit markers', async () => {
+      const bookId = await f.addBook();
+      const userId = await f.addUser();
+      await db.query(`INSERT INTO book_reviews (book_id, local_book_id, user_id, rating, content)
+        VALUES (?, ?, ?, 5, 'A useful customer review.')`, [`local:${bookId}`, bookId, userId]);
+      await db.query(`INSERT INTO book_reviews (book_id, local_book_id, is_demo, demo_label, demo_key, rating, content)
+        VALUES (?, ?, 1, 'Folio Demo Reader 01', ?, 4, 'A clearly identified sample review.')`,
+      [`local:${bookId}`, bookId, `schema-demo-${f.next()}`]);
+      const [[result]] = await db.query(`SELECT COUNT(*) AS count, SUM(is_demo = 1) AS demos
+        FROM book_reviews WHERE local_book_id = ?`, [bookId]);
+      assert.equal(Number(result.count), 2);
+      assert.equal(Number(result.demos), 1);
+      await assertDbError(db.query(`INSERT INTO book_reviews (book_id, local_book_id, user_id, rating, content)
+        VALUES ('local:999999', 999999, ?, 5, 'A review with no matching book.')`, [userId]), NO_PARENT);
+    });
   });
 
   describe('users', () => {
