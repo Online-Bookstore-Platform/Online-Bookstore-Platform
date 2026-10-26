@@ -34,20 +34,27 @@ export async function getCartItemsForOrder(db, cartId) {
   return rows;
 }
 
-export async function createOrder(db, { orderNumber, userId, totalAmount, delivery, idempotencyKey }) {
+export async function createOrder(db, { orderNumber, userId, totalAmount, delivery, idempotencyKey, paymentMethod = 'card' }) {
   const [result] = await db.query(
     `INSERT INTO orders (
        order_number, user_id, status, total_amount, currency,
        recipient_name, phone, address_line1, address_line2,
-       city, state, postal_code, country, idempotency_key
-     ) VALUES (?, ?, 'pending', ?, 'INR', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       city, state, postal_code, country, idempotency_key, payment_method, payment_status
+     ) VALUES (?, ?, 'pending', ?, 'INR', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       orderNumber, userId, totalAmount, delivery.recipientName, delivery.phone,
       delivery.addressLine1, delivery.addressLine2, delivery.city, delivery.state,
-      delivery.postalCode, delivery.country, idempotencyKey,
+      delivery.postalCode, delivery.country, idempotencyKey, paymentMethod,
+      paymentMethod === 'cod' ? 'pending_collection' : 'pending',
     ]
   );
   return result.insertId;
+}
+
+export async function setCodPaymentDue(db, orderId, userId) {
+  await db.query("UPDATE orders SET status = 'pending_collection' WHERE id = ?", [orderId]);
+  await db.query(`INSERT INTO order_status_history (order_id, from_status, to_status, changed_by, note)
+    VALUES (?, NULL, 'pending_collection', ?, 'Cash on delivery selected; payment is due on delivery.')`, [orderId, userId]);
 }
 
 export async function createOrderItem(db, orderId, item) {
@@ -72,9 +79,9 @@ export async function clearCart(db, cartId) {
 
 export async function listOrders(db, userId) {
   const [rows] = await db.query(
-    `SELECT id, order_number AS orderNumber, status, total_amount AS totalAmount,
+    `SELECT id, order_number AS orderNumber, status, payment_method AS paymentMethod, payment_status AS paymentStatus, total_amount AS totalAmount,
             currency, created_at AS createdAt,
-            (SELECT p.status FROM payments p WHERE p.order_id = orders.id ORDER BY p.id DESC LIMIT 1) AS paymentStatus
+            COALESCE((SELECT p.status FROM payments p WHERE p.order_id = orders.id ORDER BY p.id DESC LIMIT 1), payment_status) AS paymentStatus
        FROM orders WHERE user_id = ? ORDER BY created_at DESC, id DESC`,
     [userId]
   );
@@ -83,7 +90,7 @@ export async function listOrders(db, userId) {
 
 export async function findOrder(db, userId, orderId) {
   const [rows] = await db.query(
-    `SELECT id, order_number AS orderNumber, status, total_amount AS totalAmount,
+    `SELECT id, order_number AS orderNumber, status, payment_method AS paymentMethod, payment_status AS paymentStatus, total_amount AS totalAmount,
             currency, recipient_name AS recipientName, phone,
             address_line1 AS addressLine1, address_line2 AS addressLine2,
             city, state, postal_code AS postalCode, country, created_at AS createdAt
@@ -95,7 +102,8 @@ export async function findOrder(db, userId, orderId) {
 
 export async function listOrderItems(db, orderId) {
   const [rows] = await db.query(
-    `SELECT book_id AS bookId, book_title AS title, quantity, unit_price AS unitPrice
+    `SELECT book_id AS bookId, book_title AS title, quantity, unit_price AS unitPrice,
+            (SELECT b.cover_image_url FROM books b WHERE b.id = order_items.book_id) AS coverImageUrl
        FROM order_items WHERE order_id = ? ORDER BY id`,
     [orderId]
   );
@@ -150,8 +158,8 @@ export async function listOrderStockItems(db, orderId) {
 
 export async function changeOrderStatus(db, orderId, currentStatus, nextStatus) {
   const [result] = await db.query(
-    'UPDATE orders SET status = ? WHERE id = ? AND status = ?',
-    [nextStatus, orderId, currentStatus]
+    'UPDATE orders SET status = ?, payment_status = ? WHERE id = ? AND status = ?',
+    [nextStatus, nextStatus === 'paid' ? 'succeeded' : 'failed', orderId, currentStatus]
   );
   return result.affectedRows === 1;
 }

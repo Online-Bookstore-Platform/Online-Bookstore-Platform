@@ -1,9 +1,10 @@
-.nav { position: sticky; top: 0; z-index: 10; background: rgb(247 246 242 / 88%); backdrop-filter: blur(16px); border-bottom: 1px solid var(--line); }
+.nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: blur(16px); border-bottom: 1px solid var(--line); }
 .inner { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
 .brand { font-size: 1.55rem; font-weight: 750; letter-spacing: -.09em; color: var(--ink); text-decoration: none; }
 .brand span { color: var(--accent); }
 .links, .actions { display: flex; align-items: center; gap: clamp(16px, 3vw, 38px); }
 .links a, .actions a { color: var(--muted); font-size: .84rem; text-decoration: none; transition: color .2s ease; }
 .links a:hover, .actions a:hover, .links a:focus-visible, .actions a:focus-visible { color: var(--ink); }
-.actions a:last-child { color: var(--ink); }
+.actions a[href='/cart'] { color: var(--ink); }
+.theme { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
 @media (max-width: 620px) { .inner { min-height: 62px; gap: 12px; } .links { gap: 12px; } .links a, .actions a { font-size: .75rem; } .links a:nth-child(3) { display: none; } .actions { gap: 12px; } }

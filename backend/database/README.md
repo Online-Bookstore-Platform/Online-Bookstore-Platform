@@ -33,6 +33,10 @@ To sign in with the three demo accounts, set `SEED_DEMO_PASSWORD` (8–200 chara
 | `OPEN_LIBRARY_USER_AGENT` | Optional Open Library client identifier |
 | `SEED_DEMO_PASSWORD` | Optional, local demos only |
 
+### Password reset (local development)
+
+There is no outbound email adapter configured in this project. Apply `migrations/20261028_create_password_reset_tokens.sql` to an existing database (new setups already include the table), run the backend outside production on localhost, set `DEV_PASSWORD_RESET_LINK=true` in the local backend environment, and submit the email at `/forgot-password`. The UI then shows a local-only reset link. This developer switch is disabled by default, ignored in production, and reset tokens are never written to logs. The link expires after 30 minutes, can be used once, and resetting a password revokes the user’s database sessions. Production reset delivery needs an email provider adapter before enabling customer resets; production responses never return the token.
+
 There is no migration framework: the schema is one reviewed file. During development change `schema.sql` and run `npm run db:reset`; once real data exists, ship an `ALTER` script next to it and keep `schema.sql` equal to the end result.
 
 ## Tables

@@ -136,6 +136,11 @@ export default function RegistrationProfilePage({ profile = false }) {
   if (profile) {
     const initials = getInitials(user?.name);
     const roleLabel = user?.role === 'customer' ? 'Customer account' : user?.role === 'admin' ? 'Administrator account' : '';
+    const orderStatusCounts = ordersInfo.items.reduce((counts, order) => {
+      const status = order.status || 'unknown';
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {});
     return <main className={styles.dashboard}>
       <div className={styles.dashboardInner}>
         <header className={styles.dashboardHeader}>
@@ -151,7 +156,7 @@ export default function RegistrationProfilePage({ profile = false }) {
           <div className={styles.avatar} aria-hidden="true">{initials}</div>
           <div className={styles.overviewDetails}>
             <h2>{user?.name}</h2>
-            <p>{user?.email}</p>
+            <p>{user?.email}{user?.phone ? ` · ${user.phone}` : ''}</p>
           </div>
           {roleLabel && <span className={styles.accountLabel}>{roleLabel}</span>}
           <button className={styles.logoutButton} type="button" onClick={signOut} disabled={logoutBusy}>
@@ -187,6 +192,7 @@ export default function RegistrationProfilePage({ profile = false }) {
             {ordersInfo.status === 'ready' && (ordersInfo.items[0]
               ? <p className={styles.orderSnapshot}>Most recent · <strong>{ordersInfo.items[0].orderNumber}</strong><br />{ordersInfo.items[0].status.replaceAll('_', ' ')} · {new Intl.NumberFormat('en-IN', { style: 'currency', currency: ordersInfo.items[0].currency || 'INR' }).format(ordersInfo.items[0].totalAmount)}</p>
               : <p className={styles.orderSnapshot}>No orders yet. Your order history will appear here after your first purchase.</p>)}
+            {ordersInfo.status === 'ready' && ordersInfo.items.length > 0 && <p className={styles.orderCounts} aria-label="Order status summary">{ordersInfo.items.length} {ordersInfo.items.length === 1 ? 'order' : 'orders'} · {Object.entries(orderStatusCounts).map(([status, count]) => `${count} ${status.replaceAll('_', ' ')}`).join(' · ')}</p>}
             <span className={styles.ordersAction}>View your orders <span aria-hidden="true">→</span></span>
           </Link>
         </div>

@@ -18,6 +18,12 @@ export function parseOrderDraft(body) {
   }
 }
 
+export function parsePaymentMethod(value) {
+  const paymentMethod = value ?? 'card';
+  if (!['card', 'upi', 'netbanking', 'cod'].includes(paymentMethod)) throw badRequest('Choose a supported payment method.', [{ field: 'paymentMethod', message: 'Choose a supported payment method.' }]);
+  return paymentMethod;
+}
+
 export function parseIdempotencyKey(value) {
   if (value === undefined) return null;
   if (typeof value !== 'string' || value.length < 1 || value.length > 100 || /[\u0000-\u001f\u007f]/.test(value)) {

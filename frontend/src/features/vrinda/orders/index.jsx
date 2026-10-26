@@ -5,9 +5,10 @@ import { getOrderTracking, getOrders } from '../api.js';
 import styles from './Orders.module.css';
 
 const STATUSES = {
-  pending: 'Pending payment',
-  payment_failed: 'Payment needs another try',
-  paid: 'Payment received',
+  pending: 'Awaiting checkout',
+  pending_collection: 'Payment due on delivery',
+  payment_failed: 'Checkout not completed',
+  paid: 'Order confirmed',
   confirmed: 'Confirmed',
   processing: 'Being prepared',
   shipped: 'On its way',
@@ -16,7 +17,13 @@ const STATUSES = {
 };
 const money = amount => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount ?? 0);
 const date = value => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
-const STATUS_STEPS = ['pending', 'paid', 'confirmed', 'processing', 'shipped', 'delivered'];
+const ONLINE_STATUS_STEPS = ['pending', 'paid', 'confirmed', 'processing', 'shipped', 'delivered'];
+const COD_STATUS_STEPS = ['pending_collection', 'confirmed', 'processing', 'shipped', 'delivered'];
+const customerPaymentStatus = order => order.paymentMethod === 'cod'
+  ? 'Due on delivery'
+  : order.status === 'paid' ? 'Order confirmed'
+    : order.status === 'payment_failed' ? 'Not completed'
+      : 'Awaiting checkout';
 
 export default function OrdersPage({ tracking = false }) {
   const { orderId } = useParams();
@@ -63,9 +70,10 @@ export default function OrdersPage({ tracking = false }) {
       </div>
     </main>;
 
+    const statusSteps = order.paymentMethod === 'cod' ? COD_STATUS_STEPS : ONLINE_STATUS_STEPS;
     const completedIndex = order.status === 'payment_failed' || order.status === 'cancelled'
       ? -1
-      : STATUS_STEPS.indexOf(order.status);
+      : statusSteps.indexOf(order.status);
 
     return <main className={styles.page}>
       <Link className={styles.back} to="/orders">← Your orders</Link>
@@ -80,16 +88,18 @@ export default function OrdersPage({ tracking = false }) {
           <span className={`${styles.badge} ${order.status === 'cancelled' ? styles.stopped : ''}`}>{STATUSES[order.status] ?? order.status}</span>
         </div>
         {completedIndex >= 0 && <ol className={styles.progress} aria-label="Order progress">
-          {STATUS_STEPS.filter(status => status !== 'pending').map((status, index) => {
-            const actualIndex = index + 1;
+          {statusSteps.filter(status => status !== 'pending').map((status, index) => {
+            const actualIndex = index + (order.paymentMethod === 'cod' ? 0 : 1);
             return <li key={status} className={actualIndex <= completedIndex ? styles.complete : ''} aria-current={status === order.status ? 'step' : undefined}>
               <span className={styles.stepDot} aria-hidden="true" />
               <span>{STATUSES[status]}</span>
             </li>;
           })}
         </ol>}
-        {(order.status === 'pending' || order.status === 'payment_failed') && <p className={styles.pendingNote}>Your order is waiting for payment confirmation. Order status will update when the payment service confirms it.</p>}
-        <p className={styles.paymentStatus}>Payment status: <strong>{order.paymentAttempts?.length ? order.paymentAttempts.at(-1).status.replaceAll('_', ' ') : 'not started'}</strong></p>
+        {order.paymentMethod === 'cod' && <p className={styles.pendingNote}>Cash on delivery selected. Payment is due when your books arrive.</p>}
+        {order.paymentMethod !== 'cod' && (order.status === 'pending' || order.status === 'payment_failed') && <p className={styles.pendingNote}>Your order is waiting for checkout confirmation. You can return to checkout to try again.</p>}
+        <p className={styles.paymentStatus}>Payment method: <strong>{order.paymentMethod === 'cod' ? 'Cash on delivery' : order.paymentMethod ?? 'Card'}</strong></p>
+        <p className={styles.paymentStatus}>Payment status: <strong>{customerPaymentStatus(order)}</strong></p>
         {(order.status === 'cancelled' || order.status === 'payment_failed') && <ol className={styles.history} aria-label="Order status history">
           {history.map((event, index) => <HistoryEvent key={`${event.toStatus}-${index}`} event={event} />)}
         </ol>}
@@ -134,15 +144,20 @@ export default function OrdersPage({ tracking = false }) {
       : <section className={styles.orderList} aria-label="Your orders">
         {orders.map(item => <article className={styles.orderCard} key={item.id}>
           <div className={styles.orderMeta}><p className="eyebrow">Order {item.orderNumber}</p><span>{date(item.createdAt)}</span></div>
-          <div className={styles.orderMain}><div><h2>{STATUSES[item.status] ?? item.status}</h2><p>{money(item.totalAmount)} <span>·</span> {item.currency}</p><p>Payment: {item.paymentStatus ? item.paymentStatus.replaceAll('_', ' ') : 'not started'}</p></div><Link to={`/orders/${item.id}`}>Track order <span aria-hidden="true">↗</span></Link></div>
+          <div className={styles.orderMain}><div><h2>{STATUSES[item.status] ?? item.status}</h2><p>{money(item.totalAmount)} <span>·</span> {item.currency}</p><p>Payment method: {item.paymentMethod === 'cod' ? 'Cash on delivery' : item.paymentMethod ?? 'Card'} · {customerPaymentStatus(item)}</p></div><Link to={`/orders/${item.id}`}>Track order <span aria-hidden="true">↗</span></Link></div>
         </article>)}
       </section>}
   </main>;
 }
 
 function HistoryEvent({ event }) {
+  const note = event.toStatus === 'paid'
+    ? 'Your order was confirmed at checkout.'
+    : event.toStatus === 'payment_failed'
+      ? 'Checkout was not completed. Your order remains unpaid.'
+      : event.note;
   return <li className={styles.historyEvent}>
     <span className={styles.historyDot} aria-hidden="true" />
-    <div><h3>{STATUSES[event.toStatus] ?? event.toStatus}</h3>{event.note && <p>{event.note}</p>}<time dateTime={event.createdAt}>{date(event.createdAt)}</time></div>
+    <div><h3>{STATUSES[event.toStatus] ?? event.toStatus}</h3>{note && <p>{note}</p>}<time dateTime={event.createdAt}>{date(event.createdAt)}</time></div>
   </li>;
 }

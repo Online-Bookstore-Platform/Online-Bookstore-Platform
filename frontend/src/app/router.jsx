@@ -4,6 +4,7 @@ import HomePage from '../pages/HomePage.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
 import AboutPage from '../pages/AboutPage.jsx';
 import AuthenticationPage from '../features/varchas/authentication/index.jsx';
+import PasswordResetPage from '../features/varchas/authentication/PasswordResetPage.jsx';
 import BookDetailsPage from '../features/varchas/book-details/index.jsx';
 import PaymentPage from '../features/varchas/payments/index.jsx';
 import AdminCataloguePage from '../features/varchas/admin-catalogue/index.jsx';
@@ -23,6 +24,8 @@ export const router = createBrowserRouter([
       { path: '/', element: <HomePage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '/login', element: <AuthenticationPage /> },
+      { path: '/forgot-password', element: <PasswordResetPage /> },
+      { path: '/reset-password', element: <PasswordResetPage reset /> },
       { path: '/books/:bookId', element: <BookDetailsPage /> },
       { path: '/payment', element: <PaymentPage /> },
       { path: '/admin', element: <AdminCataloguePage /> },

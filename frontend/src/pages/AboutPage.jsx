@@ -6,9 +6,13 @@ export default function AboutPage() {
   return <main className={styles.page}>
     <Container>
       <header className={styles.intro}>
-        <p className="eyebrow">Books for the curious</p>
-        <h1>A little more room<br />for <em>good questions.</em></h1>
-        <p>Folio is an online bookstore project built around the pleasure of finding a book you did not know you needed. Browse a wide world of stories and ideas, then keep the reads you love together in one place.</p>
+        <div className={styles.introCopy}>
+          <p className="eyebrow">Books for the curious</p>
+          <h1>A little more room<br />for <em>good questions.</em></h1>
+          <p>Folio is an online bookstore project built around the pleasure of finding a book you did not know you needed. Browse a wide world of stories and ideas, then keep the reads you love together in one place.</p>
+          <div className={styles.introActions}><Link to="/catalogue">Explore books <span aria-hidden="true">↗</span></Link><Link to="/categories">Browse subjects</Link></div>
+        </div>
+        <figure className={styles.heroArtwork}><img src="/folio-reading.svg" alt="" width="1200" height="960" /><figcaption>A good book makes a little room for wonder.</figcaption></figure>
       </header>
       <div className={styles.rule} aria-hidden="true"><span>folio · a reader's corner</span></div>
       <section className={styles.sections} aria-label="The Folio experience">

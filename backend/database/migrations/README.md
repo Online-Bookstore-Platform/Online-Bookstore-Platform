@@ -1,5 +1,9 @@
 # Isolated migration proposals
 
+Apply `20261029_add_cod_orders.sql` to existing databases before using the cash-on-delivery checkout option. It preserves existing orders and adds explicit payment method/status fields.
+
+Apply `20261028_create_password_reset_tokens.sql` to an existing database to enable secure password resets. Reset credentials are stored as SHA-256 hashes and expire after 30 minutes. For the opt-in localhost-only developer link, set `DEV_PASSWORD_RESET_LINK=true`; it is disabled by default and never applies in production.
+
 New databases get the current review schema from `schema.sql`. For an existing database, apply `20261024_create_book_reviews.sql` if `book_reviews` does not exist, then apply `20261025_extend_book_reviews.sql`. Both changes preserve existing rows. The extension allows reviews for numeric local book IDs and clearly marked demo rows; local review rows retain a foreign key to `books.id`.
 
 Apply `20261026_add_openlibrary_work_id.sql` to an existing database to link an explicitly registered Open Library work to a local Folio product. New databases get the column from `schema.sql`.
