@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createOrdersService } from '../../src/features/vrinda/orders/orders.service.js';
-import { parseIdempotencyKey, parseOrderDraft } from '../../src/features/vrinda/orders/orders.validation.js';
+import { parseIdempotencyKey, parseOrderDraft, parsePaymentMethod } from '../../src/features/vrinda/orders/orders.validation.js';
 
 const delivery = {
   recipientName: 'Vrinda Venugopal',
@@ -18,8 +18,38 @@ test('order draft validates saved delivery and idempotency keys', () => {
   assert.deepEqual(parseOrderDraft({ delivery }), { ...delivery, addressLine2: null });
   assert.equal(parseOrderDraft({}), null);
   assert.equal(parseIdempotencyKey('draft-1'), 'draft-1');
+  assert.equal(parsePaymentMethod('cod'), 'cod');
+  assert.equal(parsePaymentMethod(undefined), 'card');
+  assert.throws(() => parsePaymentMethod('cash-app'), error => error.status === 400);
   assert.throws(() => parseOrderDraft({ delivery: { recipientName: 'Missing' } }), error => error.status === 400);
   assert.throws(() => parseIdempotencyKey(''), error => error.status === 400);
+});
+
+test('COD confirms an order as pending collection, deducts stock, and creates no payment attempt', async () => {
+  const statements = [];
+  const db = {
+    async query(sql, params) {
+      statements.push({ sql, params });
+      if (sql.startsWith('SELECT id FROM carts')) return [[{ id: 5 }]];
+      if (sql.startsWith('SELECT ci.book_id AS bookId')) return [[{ bookId: 3, quantity: 1, title: 'A Good Book', unitPrice: 12.5 }]];
+      if (sql.startsWith('INSERT INTO orders')) return [{ insertId: 21 }];
+      if (sql.startsWith('SELECT id, order_number AS orderNumber')) return [[{ id: 21, orderNumber: 'order-21', status: 'pending_collection', paymentMethod: 'cod', paymentStatus: 'pending_collection', totalAmount: 12.5, currency: 'INR' }]];
+      if (sql.startsWith('SELECT book_id AS bookId')) return [[{ bookId: 3, title: 'A Good Book', quantity: 1, unitPrice: 12.5 }]];
+      if (sql.startsWith('SELECT from_status AS fromStatus')) return [[{ fromStatus: null, toStatus: 'pending_collection', note: 'Cash due on delivery' }]];
+      if (sql.startsWith('SELECT status, amount, currency')) return [[]];
+      return [{ affectedRows: 1, insertId: 1 }];
+    },
+  };
+  let deducted;
+  const service = createOrdersService({ pool: db, checkAvailability: async () => ({ ok: true, shortages: [] }), withTransaction: (_pool, work) => work(db), deductStock: async (_connection, items) => { deducted = items; } });
+  const order = await service.createDraft(8, delivery, null, 'cod');
+  assert.equal(order.status, 'pending_collection');
+  assert.equal(order.paymentMethod, 'cod');
+  assert.equal(order.paymentStatus, 'pending_collection');
+  assert.deepEqual(deducted, [{ bookId: 3, quantity: 1 }]);
+  assert.ok(statements.some(({ sql }) => sql.includes('payment_method')));
+  assert.ok(statements.some(({ sql }) => sql.toLowerCase().includes('payment is due on delivery')));
+  assert.equal(statements.some(({ sql }) => sql.startsWith('INSERT INTO payments')), false);
 });
 
 test('draft creation snapshots server prices and clears only the owner cart', async () => {

@@ -25,12 +25,15 @@ export default function OrderSummary({ summary, delivery, children }) {
         {items.map(item => (
           <li key={item.bookId} className={item.problem ? styles.lineProblem : undefined}>
             <div className={styles.lineMain}>
-              <p className={styles.lineTitle}>
-                {item.title ? <Link to={`/books/${item.bookId}`}>{item.title}</Link> : 'A book that is no longer listed'}
-              </p>
-              {item.author && <p className={styles.lineMeta}>{item.author}</p>}
-              <p className={styles.lineMeta}>{item.quantity} × {formatPrice(item.unitPrice, currency)}</p>
-              {item.problem && <p className={styles.problem}>{item.problem}</p>}
+              <div className={styles.bookThumb} aria-hidden="true">{item.coverImageUrl && <img src={item.coverImageUrl} alt="" loading="lazy" width="48" height="68" onError={event => { event.currentTarget.hidden = true; }} />}<span>folio.</span></div>
+              <div className={styles.lineCopy}>
+                <p className={styles.lineTitle}>
+                  {item.title ? <Link to={`/books/${item.bookId}`}>{item.title}</Link> : 'A book that is no longer listed'}
+                </p>
+                {item.author && <p className={styles.lineMeta}>{item.author}</p>}
+                <p className={styles.lineMeta}>{item.quantity} × {formatPrice(item.unitPrice, currency)}</p>
+                {item.problem && <p className={styles.problem}>{item.problem}</p>}
+              </div>
             </div>
             <p className={styles.lineTotal}>{formatPrice(item.lineTotal, currency)}</p>
           </li>

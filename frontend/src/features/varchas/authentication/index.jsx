@@ -39,6 +39,7 @@ export default function AuthenticationPage() {
       {error && <p className={styles.error} role="alert">{error}</p>}
       <button className={styles.submit} type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'} <span aria-hidden="true">↗</span></button>
     </form>
+    <p className={styles.register}><Link to="/forgot-password">Forgot password?</Link></p>
     <p className={styles.register}>New to folio? <Link to="/register">Create an account</Link></p>
   </div></section>;
 }

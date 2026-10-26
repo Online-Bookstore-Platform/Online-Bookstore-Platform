@@ -12,7 +12,7 @@ export default function BookDetailsPage() {
   const { bookId } = useParams();
   const [state, setState] = useState({ status: 'loading', book: null, message: '' });
   const [reviews, setReviews] = useState({ status: 'loading', items: [], count: 0, average: null, demoCount: 0, demoAverage: null, message: '' });
-  const [review, setReview] = useState({ rating: '5', content: '' });
+  const [review, setReview] = useState({ rating: 5, content: '' });
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewNotice, setReviewNotice] = useState('');
   const [editingReview, setEditingReview] = useState(null);
@@ -67,7 +67,7 @@ export default function BookDetailsPage() {
         const items = [row, ...current.items.filter(item => String(item.id) !== String(row.id))];
         return { ...current, status: 'ready', items, count, average };
       });
-      setReview({ rating: '5', content: '' });
+      setReview({ rating: 5, content: '' });
       setEditingReview(null);
       await loadReviews();
       setReviewNotice('Your review has been saved.');
@@ -114,6 +114,7 @@ export default function BookDetailsPage() {
         : <div className={styles.purchase}><p className={styles.availability}><strong>Not sold by Folio yet.</strong> This discovery record has no Folio price or inventory.</p>{viewer.user?.role === 'admin' && <Link className={styles.add} to="/admin" state={{ discoveredBook: { title: book.title, author: book.authors?.join(', ') || book.author || '', isbn: book.isbns?.[0] || '', category: book.category || '', description: book.description || '', coverImageUrl: book.coverImageUrl || '', openLibraryWorkId: book.provider === 'openlibrary' ? book.id : '' } }}>Add discovered book to Folio catalogue</Link>}</div>}
       {cartState.message && <p className={styles.success} role="status">{cartState.message} <Link to="/cart">View cart</Link></p>}
       {cartState.error && <p className={styles.error} role="alert">{cartState.error}{/sign in/i.test(cartState.error) && <> <Link to="/login">Sign in</Link></>}</p>}
+      {book.provider === 'local' && viewer.user?.role === 'admin' && <div className={styles.adminActions}><Link to="/admin" state={{ editBookId: book.id }}>Edit this Folio book</Link><Link to="/inventory">Manage inventory</Link></div>}
       {book.previewUrl && <a className={styles.preview} href={book.previewUrl} target="_blank" rel="noreferrer">Preview on Google Books <span aria-hidden="true">↗</span></a>}
       {readable ? <a className={styles.add} href={book.reading.url} target="_blank" rel="noreferrer">{book.reading.status === 'lendable' ? 'Borrow from Open Library' : 'Read on Open Library'} <span aria-hidden="true">↗</span></a> : readingMessage && <p className={styles.availability}>{readingMessage}</p>}
       {book.provider === 'openlibrary' && <p className={styles.availability}>Reading status: {book.reading?.status || 'No readable edition identified'}</p>}
@@ -138,16 +139,16 @@ export default function BookDetailsPage() {
               <div className={styles.reviewHeading}><h3>{author}</h3></div>
               <p className={styles.reviewMeta}><span className={styles.stars} aria-label={`${item.rating} out of 5 stars`}>{'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}</span><span>{item.rating} out of 5</span><time dateTime={Number.isNaN(submitted.getTime()) ? undefined : submitted.toISOString()}>{dateLabel}</time></p>
               <p className={styles.reviewText}>{item.content}</p>
-              {item.mine && <div className={styles.reviewActions}><button type="button" onClick={() => { setEditingReview(item.id); setReview({ rating: String(item.rating), content: item.content }); }}>Edit your review</button><button type="button" onClick={() => deleteReview(item.id)}>Delete your review</button></div>}
+              {item.mine && <div className={styles.reviewActions}><button type="button" onClick={() => { setEditingReview(item.id); setReview({ rating: Number(item.rating), content: item.content }); }}>Edit your review</button><button type="button" onClick={() => deleteReview(item.id)}>Delete your review</button></div>}
             </div>
           </article>;
         })}
       </>}
       {viewer.status === 'guest' ? <p className={styles.availability}>Sign in to leave or manage your review. <Link to={`/login?next=${encodeURIComponent(`/books/${encodeURIComponent(bookId)}`)}`}>Sign in to review</Link></p> : viewer.status === 'loading' ? <p aria-live="polite">Checking sign-in status...</p> : viewer.status === 'error' ? <p className={styles.error} role="alert">We could not check your sign-in status. Reload this page to try again.</p> : <form className={styles.reviewForm} onSubmit={submitReview}>
-        <label htmlFor="review-rating">Your rating</label><select id="review-rating" value={review.rating} onChange={event => setReview(current => ({ ...current, rating: event.target.value }))}>{[5,4,3,2,1].map(value => <option key={value} value={value}>{value} out of 5</option>)}</select>
+        <span id="review-rating-label">Your rating</span><div className={styles.rating} role="radiogroup" aria-labelledby="review-rating-label">{[1,2,3,4,5].map(value => <button key={value} type="button" role="radio" aria-checked={review.rating === value} aria-label={`${value} star${value === 1 ? '' : 's'}`} tabIndex={review.rating === value ? 0 : -1} className={review.rating >= value ? styles.starSelected : styles.star} onClick={() => setReview(current => ({ ...current, rating: value }))} onKeyDown={event => { if (['ArrowRight','ArrowUp','ArrowLeft','ArrowDown'].includes(event.key)) { event.preventDefault(); const delta = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : -1; const next = Math.min(5, Math.max(1, review.rating + delta)); setReview(current => ({ ...current, rating: next })); event.currentTarget.parentElement.querySelectorAll('[role=radio]')[next - 1]?.focus(); } }}>★</button>)}</div><span className={styles.ratingScore}>{review.rating} out of 5</span>
         <label htmlFor="review-content">Your review</label><textarea id="review-content" minLength={10} maxLength={2000} required value={review.content} onChange={event => setReview(current => ({ ...current, content: event.target.value }))} />
         {review.content.length > 0 && review.content.trim().length < 10 && <p className={styles.error}>Please write at least 10 non-space characters.</p>}
-        <button className={styles.add} type="submit" disabled={reviewBusy || review.content.trim().length < 10}>{reviewBusy ? 'Submitting…' : editingReview ? 'Save review' : 'Submit review'}</button>
+        <button className={styles.add} type="submit" disabled={reviewBusy || !Number.isInteger(review.rating) || review.rating < 1 || review.rating > 5 || review.content.trim().length < 10}>{reviewBusy ? 'Submitting…' : editingReview ? 'Save review' : 'Submit review'}</button>
         {reviews.message && <p role="alert" className={styles.error}>{reviews.message}</p>}
         {reviewNotice && <p className={styles.success} role="status">{reviewNotice}</p>}
       </form>}

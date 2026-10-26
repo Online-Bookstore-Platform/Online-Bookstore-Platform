@@ -26,6 +26,7 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState({});
   const [attempted, setAttempted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('card');
   const [notice, setNotice] = useState(null);
   const [reload, setReload] = useState(0);
   const formPrefilled = useRef(false);
@@ -110,8 +111,8 @@ export default function CheckoutPage() {
         return;
       }
 
-      const order = await createOrderDraft(clean);
-      navigate(paymentPath(order));
+      const order = await createOrderDraft(clean, paymentMethod);
+      navigate(paymentMethod === 'cod' ? `/orders/${encodeURIComponent(order.id)}` : paymentPath(order));
     } catch (error) {
       await handleSubmitError(error);
     } finally {
@@ -200,6 +201,7 @@ export default function CheckoutPage() {
         <div className={styles.layout}>
           <DeliveryForm values={values} errors={errors} onChange={handleChange} onBlur={handleBlur} onSubmit={continueToPayment} />
           <OrderSummary summary={summary} delivery={values}>
+            <fieldset className={styles.paymentMethods}><legend>Payment method</legend>{[['card','Credit or debit card'],['upi','UPI'],['netbanking','Net banking'],['cod','Cash on delivery']].map(([value,label]) => <label key={value}><input type="radio" name="paymentMethod" value={value} checked={paymentMethod===value} onChange={() => setPaymentMethod(value)} /> {label}</label>)}{paymentMethod === 'cod' && <p>Payment is due when your order is delivered.</p>}</fieldset>
             {blocked && <p className={styles.blocked}>Some books in your order can’t be bought as chosen. <Link to="/cart">Change your cart</Link> to continue.</p>}
             <button className={styles.continue} type="submit" form="delivery-form" disabled={busy || blocked}>
               {busy ? 'Checking your order…' : 'Continue to payment'} <span aria-hidden="true">↗</span>

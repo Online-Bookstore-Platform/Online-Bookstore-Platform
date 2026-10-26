@@ -2,7 +2,7 @@ export function createMySqlPaymentsRepository(pool) {
   const map = row => row && ({
     id: String(row.id), orderId: String(row.order_id), customerId: String(row.user_id),
     amount: Number(row.amount), currency: row.currency, status: row.status,
-    idempotencyKey: row.idempotency_key, providerOrderId: row.provider_order_id,
+    idempotencyKey: row.idempotency_key,
     providerReference: row.provider_reference,
   });
   return {
@@ -20,10 +20,6 @@ export function createMySqlPaymentsRepository(pool) {
          VALUES (?, ?, ?, ?, ?, 'pending')`, [idempotencyKey, orderId, customerId, amount, currency]
       );
       return this.findById(result.insertId);
-    },
-    async setProviderOrder(id, providerOrderId) {
-      await pool.query('UPDATE payments SET provider_order_id = ? WHERE id = ? AND status = \'pending\'', [providerOrderId, id]);
-      return this.findById(id);
     },
     async updateStatus(id, status, providerReference, db = pool) {
       const [result] = await db.query(

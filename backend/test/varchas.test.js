@@ -38,7 +38,7 @@ function paymentFixture({ outcome = 'succeeded', amount = 750 } = {}) {
   let orderStatus = 'pending';
   const orders = {
     async getPayableOrder(id, customerId) { orderLookups += 1; return id === 'o-1' && customerId === 'u-1' ? { id, customerId, amount, currency: 'INR', status: orderStatus } : null; },
-    async recordPaymentStatus({ paymentStatus }) { if (paymentStatus === 'succeeded') orderStatus = 'paid'; },
+    async recordPaymentStatus({ paymentStatus }) { orderStatus = paymentStatus === 'succeeded' ? 'paid' : 'payment_failed'; },
   };
   const payments = {
     async findByIdempotencyKey(key) { return [...attempts.values()].find(item => item.idempotencyKey === key) || null; },
@@ -46,7 +46,7 @@ function paymentFixture({ outcome = 'succeeded', amount = 750 } = {}) {
     async createPending(input) { const item = { id: 'p-1', status: 'pending', ...input }; attempts.set(item.id, item); return item; },
     async updateStatus(id, status, providerReference) { const item = { ...attempts.get(id), status, providerReference }; attempts.set(id, item); return item; },
   };
-  const provider = { mode: 'mock', async process() { providerCalls += 1; return { status: outcome, providerReference: 'sandbox-ref' }; } };
+  const provider = { mode: 'internal', async process() { providerCalls += 1; return { status: outcome, providerReference: 'folio-ref' }; } };
   return { service: createPaymentService({ orders, payments, provider }), attempts, get providerCalls() { return providerCalls; }, get orderLookups() { return orderLookups; } };
 }
 
@@ -59,6 +59,15 @@ test('payment processing uses the server amount and reuses an idempotent attempt
   assert.equal(second.reused, true);
   assert.equal(fixture.providerCalls, 1);
   assert.equal(fixture.orderLookups, 1, 'a retry returns the prior result even after the order is marked paid');
+});
+
+test('a declined checkout can start a fresh attempt after the order remains unpaid', async () => {
+  const fixture = paymentFixture({ outcome: 'failed' });
+  const first = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-failed' });
+  const retried = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-retry' });
+  assert.equal(first.attempt.status, 'failed');
+  assert.equal(retried.attempt.status, 'failed');
+  assert.equal(fixture.providerCalls, 2);
 });
 
 test('a pending payment attempt can be cancelled by its owner', async () => {
@@ -76,66 +85,15 @@ test('payment attempts reject missing ownership and invalid order amounts before
   assert.equal(fixture.providerCalls, 0);
 });
 
-test('mock payments require an explicit provider and never silently approve', async () => {
-  assert.equal(createPaymentProvider({}).mode, 'unconfigured');
-  assert.equal((await createPaymentProvider({ PAYMENT_PROVIDER: 'mock' }).process({ paymentId: 'p-1' })).status, 'failed');
-  assert.equal((await createPaymentProvider({ PAYMENT_PROVIDER: 'mock', PAYMENT_MOCK_RESULT: 'approved' }).process({ paymentId: 'p-1' })).status, 'succeeded');
-  for (const [configured, expected] of Object.entries({ approved: 'succeeded', declined: 'failed', cancelled: 'cancelled', timeout: 'timed_out' })) {
-    assert.equal((await createPaymentProvider({ PAYMENT_PROVIDER: 'mock', PAYMENT_MOCK_RESULT: configured }).process({ paymentId: 'p-2' })).status, expected);
+test('internal checkout creates only local outcomes and supports retry-result scenarios', async () => {
+  assert.equal(createPaymentProvider({}).mode, 'internal');
+  assert.equal((await createPaymentProvider({ FOLIO_CHECKOUT_OUTCOME: 'approved' }).process({ paymentId: 'p-1' })).status, 'succeeded');
+  for (const [configured, expected] of Object.entries({ declined: 'failed', cancelled: 'cancelled', timeout: 'timed_out' })) {
+    const provider = createPaymentProvider({ FOLIO_CHECKOUT_OUTCOME: configured });
+    if (configured === 'timeout') await assert.rejects(provider.process({ paymentId: 'p-2' }), error => error.code === 'PAYMENT_TIMEOUT');
+    else assert.equal((await provider.process({ paymentId: 'p-2' })).status, expected);
   }
-  assert.throws(() => createPaymentProvider({ PAYMENT_PROVIDER: 'mock', PAYMENT_MOCK_RESULT: 'unknown' }), /must be approved/);
-  assert.throws(() => createPaymentProvider({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'mock', PAYMENT_MOCK_RESULT: 'approved' }), /not permitted in production/);
-});
-
-test('Razorpay mode creates an INR order from server amount and verifies signed captured payment state', async () => {
-  const { createHmac } = await import('node:crypto');
-  const calls = [];
-  const fetchImpl = async (url, options) => {
-    calls.push({ url, options });
-    if (url.endsWith('/orders')) return Response.json({ id: 'order_rzp_1', amount: 12550, currency: 'INR' });
-    return Response.json({ id: 'pay_rzp_1', order_id: 'order_rzp_1', amount: 12550, currency: 'INR', status: 'captured' });
-  };
-  const provider = createPaymentProvider({ PAYMENT_PROVIDER: 'razorpay', RAZORPAY_KEY_ID: 'rzp_test_key', RAZORPAY_KEY_SECRET: 'test-secret' }, fetchImpl);
-  const order = await provider.initiate({ paymentId: 'attempt-1', amount: 125.5, currency: 'INR' });
-  assert.deepEqual(order, { providerOrderId: 'order_rzp_1', amount: 12550, currency: 'INR' });
-  assert.equal(JSON.parse(calls[0].options.body).amount, 12550);
-  assert.match(calls[0].options.headers.Authorization, /^Basic /);
-  const signature = createHmac('sha256', 'test-secret').update('order_rzp_1|pay_rzp_1').digest('hex');
-  assert.equal(provider.verifySignature({ providerOrderId: 'order_rzp_1', providerPaymentId: 'pay_rzp_1', signature }), true);
-  assert.equal(provider.verifySignature({ providerOrderId: 'order_other', providerPaymentId: 'pay_rzp_1', signature }), false);
-  assert.deepEqual(await provider.verifyPayment({ providerOrderId: 'order_rzp_1', providerPaymentId: 'pay_rzp_1', amount: 125.5, currency: 'INR' }), { status: 'succeeded', providerReference: 'pay_rzp_1' });
-});
-
-test('Razorpay payment service rejects invalid signatures and only records server confirmed captured state', async () => {
-  let status = 'pending';
-  let orderStatus = 'pending';
-  const attempt = { id: 'p-1', orderId: 'o-1', customerId: 'u-1', amount: 75, currency: 'INR', status: 'pending', providerOrderId: 'rzp-order-1' };
-  const payments = {
-    async findById() { return attempt; },
-    async updateStatus(_id, next, reference) { attempt.status = next; attempt.providerReference = reference; return { ...attempt }; },
-  };
-  const provider = {
-    mode: 'razorpay',
-    verifySignature: ({ signature }) => signature === 'valid',
-    async verifyPayment() { return { status, providerReference: 'rzp-pay-1' }; },
-  };
-  const service = createPaymentService({
-    payments, provider,
-    orders: {
-      async recordPaymentStatus({ paymentStatus }) { if (paymentStatus === 'succeeded') orderStatus = 'paid'; },
-    },
-  });
-  const args = { paymentId: 'p-1', customerId: 'u-1', providerOrderId: 'rzp-order-1', providerPaymentId: 'rzp-pay-1', signature: 'invalid' };
-  await assert.rejects(service.verify(args), error => error.code === 'PAYMENT_VERIFICATION_FAILED');
-  assert.equal(attempt.status, 'pending');
-  await assert.rejects(service.verify({ ...args, customerId: 'u-2', signature: 'valid' }), error => error.status === 404);
-  const awaitingCapture = await service.verify({ ...args, signature: 'valid' });
-  assert.equal(awaitingCapture.status, 'pending');
-  assert.equal(orderStatus, 'pending');
-  status = 'succeeded';
-  const confirmed = await service.verify({ ...args, signature: 'valid' });
-  assert.equal(confirmed.status, 'succeeded');
-  assert.equal(orderStatus, 'paid');
+  assert.throws(() => createPaymentProvider({ FOLIO_CHECKOUT_OUTCOME: 'unknown' }), /must be approved/);
 });
 
 test('production sessions require an explicit secret and persistent store', () => {
@@ -189,7 +147,7 @@ test('admin book endpoints require a server-verified administrator role', async 
   ];
   const app = createApp({
     sessionSecret: 'test-session-secret-that-is-long-enough',
-    env: { NODE_ENV: 'test', PAYMENT_PROVIDER: 'mock' },
+    env: { NODE_ENV: 'test' },
     repositories: {
       users: { findByEmail: async email => users.find(user => user.email === email), findById: async id => users.find(user => user.id === id) },
       books: { findById: async () => null, list: async () => [], create: async book => book, update: async () => null, deleteOrDeactivate: async () => false },

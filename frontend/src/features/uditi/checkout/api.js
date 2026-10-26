@@ -13,13 +13,13 @@ export const ORDER_SERVICE_UNAVAILABLE = 'ORDER_SERVICE_UNAVAILABLE';
  * then continues on Varchas's /payment?orderId=<id>. If the order service is not connected the
  * A browser-session idempotency key makes retries safe if the response is interrupted.
  */
-export async function createOrderDraft(delivery) {
+export async function createOrderDraft(delivery, paymentMethod) {
   let result;
   const keyName = 'folio.order-draft-idempotency-key';
   const idempotencyKey = sessionStorage.getItem(keyName) || crypto.randomUUID();
   sessionStorage.setItem(keyName, idempotencyKey);
   try {
-    result = await apiRequest('/api/orders', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: { delivery } });
+    result = await apiRequest('/api/orders', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: { delivery, ...(paymentMethod ? { paymentMethod } : {}) } });
   } catch (error) {
     throw orderServiceProblem(error);
   }

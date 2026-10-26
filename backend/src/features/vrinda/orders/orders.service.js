@@ -38,7 +38,7 @@ async function getOrderDetails(db, userId, orderId) {
 
 export function createOrdersService({ pool, checkAvailability, withTransaction, deductStock = deductOrderStock }) {
   return {
-    async createDraft(userId, requestedDelivery, idempotencyKey) {
+    async createDraft(userId, requestedDelivery, idempotencyKey, paymentMethod = 'card') {
       try {
         return await withTransaction(pool, async connection => {
           if (idempotencyKey) {
@@ -68,9 +68,13 @@ export function createOrdersService({ pool, checkAvailability, withTransaction, 
             totalAmount,
             delivery,
             idempotencyKey,
+            paymentMethod,
           });
           for (const item of items) await repository.createOrderItem(connection, orderId, item);
-          await repository.createInitialStatus(connection, orderId, userId);
+          if (paymentMethod === 'cod') {
+            await deductStock(connection, items.map(({ bookId, quantity }) => ({ bookId, quantity })));
+            await repository.setCodPaymentDue(connection, orderId, userId);
+          } else await repository.createInitialStatus(connection, orderId, userId);
           await repository.clearCart(connection, cartId);
 
           return getOrderDetails(connection, userId, orderId);
@@ -131,8 +135,8 @@ export function createOrdersService({ pool, checkAvailability, withTransaction, 
           fromStatus: order.status,
           toStatus: nextStatus,
           note: paymentStatus === 'succeeded'
-            ? `Payment ${paymentId} confirmed.`
-            : `Payment ${paymentId} ${paymentStatus}.`,
+            ? 'Checkout completed and the order was confirmed.'
+            : `Checkout was not completed (${paymentStatus}).`,
         });
         const paymentAttempt = paymentUpdate ? await paymentUpdate(connection) : null;
         return { orderId: order.id, status: nextStatus, ...(paymentUpdate ? { paymentAttempt } : {}) };

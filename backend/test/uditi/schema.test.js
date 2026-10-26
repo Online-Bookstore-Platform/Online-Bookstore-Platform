@@ -41,6 +41,7 @@ describe('database schema (#13)', databaseTests, () => {
       'order_items',
       'order_status_history',
       'orders',
+      'password_reset_tokens',
       'payments',
       'presentation_products',
       'sessions',

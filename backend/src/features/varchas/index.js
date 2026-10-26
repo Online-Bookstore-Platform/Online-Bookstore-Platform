@@ -37,7 +37,7 @@ export function createVarchasRouter({ repositories = {}, env = process.env } = {
   const auth = createAuthMiddleware(deps.users);
   const paymentService = createPaymentService({ orders: deps.orders, payments: deps.payments, provider: createPaymentProvider(env) });
 
-  router.use('/auth', createAuthRouter({ authService, requireAuth: auth.requireAuth }));
+  router.use('/auth', createAuthRouter({ authService, requireAuth: auth.requireAuth, users: deps.users, env }));
   router.use('/books', createBooksRouter({ books: deps.books, requireAdmin: auth.requireAdmin }));
   router.use('/payments', createPaymentsRouter({ paymentService, requireAuth: auth.requireAuth }));
   router.use('/admin', createAdminBooksRouter({ books: deps.books, requireAdmin: auth.requireAdmin }));

@@ -89,9 +89,8 @@ export default function CartPage() {
           <ul className={styles.items}>
             {cart.items.map(item => <li className={styles.item} key={item.itemId}>
               <div className={styles.cover}>
-                {item.coverImageUrl
-                  ? <img src={item.coverImageUrl} alt="" loading="lazy" />
-                  : <span aria-hidden="true">{item.title?.slice(0, 1) ?? 'F'}</span>}
+                {item.coverImageUrl && <img src={item.coverImageUrl} alt="" loading="lazy" onError={event => { event.currentTarget.hidden = true; }} />}
+                <span className={styles.coverFallback} aria-hidden="true">{item.title?.slice(0, 1) ?? 'F'}</span>
               </div>
               <div className={styles.details}>
                 <h3><Link to={`/books/${item.bookId}`}>{item.title}</Link></h3>

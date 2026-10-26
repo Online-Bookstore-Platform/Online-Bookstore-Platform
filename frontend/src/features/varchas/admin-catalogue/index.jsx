@@ -6,7 +6,7 @@ import styles from './AdminCatalogue.module.css';
 
 const emptyBook = { title: '', author: '', isbn: '', openLibraryWorkId: '', category: '', description: '', price: '', coverImageUrl: '' };
 
-function CatalogueManager({ discoveredBook }) {
+function CatalogueManager({ discoveredBook, editBookId }) {
   const [books, setBooks] = useState([]);
   const [form, setForm] = useState(emptyBook);
   const [editingId, setEditingId] = useState(null);
@@ -30,6 +30,13 @@ function CatalogueManager({ discoveredBook }) {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!editBookId || loading) return;
+    const book = books.find(item => String(item.id) === String(editBookId));
+    if (!book) return;
+    setEditingId(book.id);
+    setForm(Object.fromEntries(Object.keys(emptyBook).map(key => [key, key === 'price' ? String(book[key] ?? '') : book[key] ?? ''])));
+  }, [books, editBookId, loading]);
   useEffect(() => {
     if (!discoveredBook?.title) return;
     setEditingId(null);
@@ -102,4 +109,4 @@ function CatalogueManager({ discoveredBook }) {
   </section>;
 }
 
-export default function AdminCataloguePage() { const location = useLocation(); return <AdminOnly><CatalogueManager discoveredBook={location.state?.discoveredBook} /></AdminOnly>; }
+export default function AdminCataloguePage() { const location = useLocation(); return <AdminOnly><CatalogueManager discoveredBook={location.state?.discoveredBook} editBookId={location.state?.editBookId} /></AdminOnly>; }

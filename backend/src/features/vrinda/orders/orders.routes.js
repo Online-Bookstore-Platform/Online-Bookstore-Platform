@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler, badRequest } from '../shared/errors.js';
-import { parseIdempotencyKey, parseOrderDraft } from './orders.validation.js';
+import { parseIdempotencyKey, parseOrderDraft, parsePaymentMethod } from './orders.validation.js';
 import { createOrdersService } from './orders.service.js';
 
 function parseOrderId(value) {
@@ -18,8 +18,9 @@ export function createOrdersRouter({ pool, requireAuth, checkAvailability, withT
 
   const createDraft = asyncHandler(async (request, response) => {
     const delivery = parseOrderDraft(request.body);
+    const paymentMethod = parsePaymentMethod(request.body?.paymentMethod);
     const idempotencyKey = parseIdempotencyKey(request.get('Idempotency-Key'));
-    const order = await orders.createDraft(request.user.id, delivery, idempotencyKey);
+    const order = await orders.createDraft(request.user.id, delivery, idempotencyKey, paymentMethod);
     response.status(201).json({ order });
   });
 
