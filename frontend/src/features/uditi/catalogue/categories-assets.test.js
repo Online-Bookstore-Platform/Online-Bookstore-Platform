@@ -12,12 +12,16 @@ const expected = [
 ];
 
 test('each catalogue category has an optimized, local, self-contained illustration', async () => {
-  assert.deepEqual((await readdir(assets)).sort(), [...expected].sort());
+  assert.deepEqual((await readdir(assets)).sort(), [...expected, 'anime-manga-dark.svg'].sort());
   for (const file of expected) {
     const [source, details] = await Promise.all([readFile(join(assets, file), 'utf8'), stat(join(assets, file))]);
     assert.match(source, /^<svg\s/);
-    assert.match(source, /viewBox="0 0 1200 800"/);
+    assert.match(source, file === 'anime-manga.svg' ? /viewBox="0 0 1600 1000"/ : /viewBox="0 0 1200 800"/);
     assert.doesNotMatch(source, /(?:href|xlink:href|src)=["']https?:\/\//);
     assert.ok(details.size < 12_000, `${file} should remain a compact vector asset`);
   }
+  const darkAnime = await readFile(join(assets, 'anime-manga-dark.svg'), 'utf8');
+  assert.match(darkAnime, /Japanese mountain and cherry blossom night scene/);
+  assert.match(darkAnime, /viewBox="0 0 1600 1000"/);
+  assert.doesNotMatch(darkAnime, /(?:href|xlink:href|src)=["']https?:\/\//);
 });

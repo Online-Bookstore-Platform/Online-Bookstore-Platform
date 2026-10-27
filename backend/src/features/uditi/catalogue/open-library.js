@@ -31,6 +31,24 @@ export function isValidIsbn(value) {
 }
 const normalizeName = value => text(value).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
+const CATEGORY_ALIASES = {
+  'science fiction': ['science fiction', 'sci fi', 'scifi', 'sf'],
+  'children s books': ['children s books', 'childrens books', 'juvenile fiction', 'juvenile literature', 'children'],
+  'anime manga': ['anime manga', 'manga', 'anime', 'japanese comics', 'graphic novels manga', 'light novels'],
+  computing: ['computing', 'computer science', 'computers', 'information technology'],
+  science: ['science', 'physics', 'chemistry', 'biology', 'natural sciences'],
+  fiction: ['fiction', 'literature'],
+};
+
+function categoryMatches(category, label, subjects = []) {
+  const wanted = normalizeName(label);
+  const aliases = CATEGORY_ALIASES[wanted] || [wanted];
+  return [category, ...subjects].some(value => {
+    const normalized = normalizeName(value);
+    return aliases.some(alias => normalized === alias || normalized.startsWith(`${alias} `) || normalized.endsWith(` ${alias}`));
+  });
+}
+
 function isAnimeManga(subjects = []) {
   return subjects.some(value => /\b(manga|anime|light novels?|japanese comics)\b/i.test(value));
 }
@@ -144,16 +162,23 @@ function googleBook(volume, { large = false } = {}) {
   return book;
 }
 
-function openLibraryQuery(q, ids) {
+export function openLibraryQuery(q, ids) {
   const category = ids.map(id => SUBJECTS[Number(id) - 1]).filter(Boolean).map(name => {
     if (name === 'Anime & Manga') return '(subject:manga OR subject:anime OR subject:light_novels OR subject:graphic_novels)';
+    if (name === "Children's Books") return '(subject:juvenile_fiction OR subject:juvenile_literature OR subject:children)';
+    if (name === 'Science Fiction') return '(subject:science_fiction OR subject:science_fiction_and_fantasy)';
     return `subject:${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
   });
   return [q || (!category.length ? 'subject:fiction' : ''), category.length ? `(${category.join(' OR ')})` : ''].filter(Boolean).join(' ');
 }
 
-function googleQuery(q, ids) {
-  const category = ids.map(id => SUBJECTS[Number(id) - 1]).filter(Boolean).map(name => name === 'Anime & Manga' ? 'subject:manga' : `subject:${name}`);
+export function googleQuery(q, ids) {
+  const category = ids.map(id => SUBJECTS[Number(id) - 1]).filter(Boolean).map(name => {
+    if (name === 'Anime & Manga') return '(subject:manga OR subject:anime OR subject:"light novels" OR subject:"graphic novels")';
+    if (name === 'Science Fiction') return '(subject:"science fiction" OR subject:"fiction / science fiction")';
+    if (name === "Children's Books") return '(subject:"juvenile fiction" OR subject:"juvenile literature" OR subject:children)';
+    return `subject:${name}`;
+  });
   return [q, ...category].filter(Boolean).join(' ') || 'subject:fiction';
 }
 
@@ -374,7 +399,7 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
       url.searchParams.set('limit', String(pageSize));
       url.searchParams.set('fields', 'key,title,author_name,first_publish_year,publish_date,publisher,isbn,cover_i,subject,number_of_pages_median,has_fulltext');
       const data = await readOpenLibrary(url);
-      const books = deduplicate(array(data.docs).map(doc => openLibraryBook(doc, {}, null)).filter(book => ids.includes('18') ? isAnimeManga(book.subjects) : true));
+      const books = deduplicate(array(data.docs).map(doc => openLibraryBook(doc, {}, null)).filter(book => !ids.includes('18') || isAnimeManga(book.subjects)));
       return { books, totalItems: Number(data.num_found ?? data.numFound) || books.length, provider };
     }
 
@@ -391,7 +416,7 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
     url.searchParams.set('orderBy', req.query.sort === 'newest' ? 'newest' : 'relevance');
     url.searchParams.set('key', env.GOOGLE_BOOKS_API_KEY);
     const data = await readGoogle(url);
-    const books = deduplicate(array(data.items).map(googleBook).filter(book => ids.includes('18') ? isAnimeManga(book.subjects) : true));
+    const books = deduplicate(array(data.items).map(googleBook).filter(book => !ids.includes('18') || isAnimeManga(book.subjects)));
     return { books, totalItems: Number(data.totalItems) || 0, provider, pageSize: resultPageSize };
   }
 
@@ -424,9 +449,7 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
 
       let localMatches = await searchLocalBooks(rawQuery);
       if (categoryIds.length) {
-        localMatches = localMatches.filter(book => categoryIds.some(id => id === '18'
-          ? isAnimeManga(book.subjects)
-          : normalizeName(book.category) === normalizeName(SUBJECTS[Number(id) - 1])));
+        localMatches = localMatches.filter(book => categoryIds.some(id => categoryMatches(book.category, SUBJECTS[Number(id) - 1], book.subjects)));
       }
       if (sort === 'title') localMatches.sort((a, b) => a.title.localeCompare(b.title) * (order === 'desc' ? -1 : 1));
       if (sort === 'author') localMatches.sort((a, b) => a.author.localeCompare(b.author) * (order === 'desc' ? -1 : 1));
@@ -454,6 +477,16 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
         }
       }
 
+      // Open Library can return a syntactically valid but empty/low quality response.
+      // Try Google Books when configured, while retaining the primary results if fallback fails.
+      if (result.provider === 'openlibrary' && result.books.length < Math.min(2, pageSize) && env.GOOGLE_BOOKS_API_KEY) {
+        try {
+          const fallback = await searchProvider(req, 'googlebooks', { page: providerPage, pageSize: providerPageSize });
+          if (fallback.books.length) result = { ...fallback, books: deduplicate([...result.books, ...fallback.books]).slice(0, providerPageSize) };
+        }
+        catch (error) { console.warn('[catalogue] Google Books empty-result fallback failed', JSON.stringify({ code: error.code || 'BOOK_PROVIDER_UNAVAILABLE' })); }
+      }
+
       const externalBooks = await attachStoreProducts(result.books);
       const queryIdentifier = normalizeIsbn(rawQuery);
       const localIds = new Set(localMatches.map(book => String(book.id)));
@@ -471,11 +504,6 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
       const pageExternal = localSearchMode ? eligibleExternal.slice(providerIndex, providerIndex + externalSlots) : eligibleExternal;
       let books = [...localPage, ...pageExternal];
       books = deduplicate(books);
-      if (categoryIds.length) {
-        books = books.filter(book => categoryIds.some(id => id === '18'
-          ? isAnimeManga(book.subjects)
-          : normalizeName(book.category) === normalizeName(SUBJECTS[Number(id) - 1])));
-      }
       const minimumPrice = req.query.minPrice === undefined ? null : Number(req.query.minPrice);
       const maximumPrice = req.query.maxPrice === undefined ? null : Number(req.query.maxPrice);
       const availability = String(req.query.availability || 'all');

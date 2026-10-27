@@ -182,6 +182,7 @@ export default function CheckoutPage() {
           <p className="eyebrow">Checkout</p>
           <h1>A smooth path to your doorstep.</h1>
           <p>Tell us where to send your books, check the summary, and continue to payment.</p>
+          <nav className={styles.progress} aria-label="Checkout progress"><span>Cart</span><i /> <strong>Delivery</strong><i /> <span>Payment</span><i /> <span>Confirmation</span></nav>
         </header>
 
         {notice && (

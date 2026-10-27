@@ -1,7 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../../src/app.js';
-import { isValidIsbn } from '../../src/features/uditi/catalogue/open-library.js';
+import { googleQuery, isValidIsbn, openLibraryQuery } from '../../src/features/uditi/catalogue/open-library.js';
+
+test('all 18 category mappings produce provider-specific subject searches', () => {
+  const expected = [
+    'fiction', 'fantasy', 'science_fiction', 'mystery', 'romance', 'history', 'biography', 'philosophy', 'poetry',
+    'juvenile', 'computing', 'science', 'psychology', 'business', 'travel', 'adventure', 'classics', 'manga',
+  ];
+  expected.forEach((term, index) => {
+    const id = String(index + 1);
+    assert.match(openLibraryQuery('', [id]), new RegExp(term));
+    assert.match(googleQuery('', [id]).toLowerCase(), index === 17 ? /manga|anime/ : new RegExp(term.replaceAll('_', '[ _]')));
+  });
+  assert.match(openLibraryQuery('', ['18']), /subject:anime/);
+  assert.match(googleQuery('', ['10']), /juvenile fiction/);
+  assert.match(googleQuery('', ['3']), /science fiction/);
+});
 
 test('ISBN validation accepts valid ISBN-10/13 checksums and rejects malformed or invalid checksums', () => {
   assert.equal(isValidIsbn('123456789X'), true);
@@ -336,6 +351,30 @@ test('malformed Open Library responses activate the configured Google Books fall
     assert.equal(result.source, 'googlebooks');
     assert.equal(result.books[0].title, 'Fallback title');
     assert.equal(result.books[0].coverImageUrl, 'https://books.google.com/books/content?id=cover');
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('an empty Open Library category result falls back to Google Books', async () => {
+  const originalFetch = globalThis.fetch;
+  const queries = [];
+  globalThis.fetch = async input => {
+    const url = new URL(String(input));
+    queries.push(url);
+    if (url.hostname === 'openlibrary.org') return Response.json({ numFound: 0, docs: [] });
+    return Response.json({ totalItems: 1, items: [{ id: 'juvenile-fallback', volumeInfo: { title: 'A Young Readers Book', categories: ['Young Adult Fiction'] } }] });
+  };
+  const server = createApp({ env: { NODE_ENV: 'test', GOOGLE_BOOKS_API_KEY: 'test-key' } }).listen(0);
+  try {
+    await new Promise(resolve => server.once('listening', resolve));
+    const response = await originalFetch(`http://127.0.0.1:${server.address().port}/api/catalogue/books?category=10&page=1&pageSize=12`);
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.source, 'googlebooks');
+    assert.equal(result.books[0].title, 'A Young Readers Book');
+    assert.match(queries.find(url => url.hostname === 'www.googleapis.com').searchParams.get('q'), /juvenile fiction/);
   } finally {
     await new Promise(resolve => server.close(resolve));
     globalThis.fetch = originalFetch;

@@ -50,7 +50,7 @@
 .historyEvent h3 { margin: 0; font-size: .84rem; font-weight: 600; }
 .historyEvent p { margin: 4px 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
 .historyEvent time { color: var(--muted); font-size: .72rem; }
-.error,.message { color: #8a392c; font-size: .84rem; line-height: 1.6; }
+.error,.message { color: var(--danger-ink); font-size: .84rem; line-height: 1.6; }
 .error { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px; border-left: 3px solid var(--danger-ink); background: var(--danger-surface); }
 .error button { flex: 0 0 auto; border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 .state { min-height: 58vh; padding: 70px 24px; display: grid; place-content: center; color: var(--muted); }

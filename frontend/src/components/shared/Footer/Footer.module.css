@@ -1,11 +1,12 @@
-.footer { background: #eeede8; padding: 64px 0 24px; color: var(--muted); }
+.footer { background: var(--footer-surface); padding: 64px 0 24px; color: var(--footer-muted); }
 .top { display: grid; grid-template-columns: 1.7fr repeat(3, 1fr); gap: 32px; padding-bottom: 50px; }
-.brand { font-size: 1.55rem; font-weight: 750; letter-spacing: -.09em; color: var(--ink); text-decoration: none; }
-.brand span { color: var(--accent); }
+.brand { font-size: 1.55rem; font-weight: 750; letter-spacing: -.09em; color: var(--footer-text); text-decoration: none; }
+.brand span { color: #e6a27f; }
 .top p { line-height: 1.7; font-size: .88rem; }
 .column { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
-.column h2 { color: var(--ink); font-size: .78rem; margin: 5px 0 7px; }
-.column a { color: var(--muted); text-decoration: none; font-size: .82rem; }
-.column a:hover { color: var(--ink); }
+.column h2 { color: var(--footer-text); font-size: .78rem; margin: 5px 0 7px; }
+.column a { color: var(--footer-muted); text-decoration: none; font-size: .82rem; }
+.column a:hover, .column a:focus-visible { color: #fff; text-decoration: underline; text-underline-offset: 4px; }
+.footer :focus-visible { outline-color: #f0b18f; }
 .bottom { padding-top: 18px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; font-size: .72rem; }
 @media (max-width: 650px) { .top { grid-template-columns: 1fr 1fr; } .bottom { flex-direction: column; } }
