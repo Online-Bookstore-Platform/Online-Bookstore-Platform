@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" fill="none" role="img" aria-label="Original anime-inspired Japanese mountain and cherry blossom night scene">
+  <defs>
+    <linearGradient id="sky" x1="140" y1="40" x2="1280" y2="920" gradientUnits="userSpaceOnUse"><stop stop-color="#30395e"/><stop offset=".53" stop-color="#64476c"/><stop offset="1" stop-color="#28384d"/></linearGradient>
+    <linearGradient id="water" x1="790" y1="650" x2="790" y2="1000" gradientUnits="userSpaceOnUse"><stop stop-color="#315d70"/><stop offset="1" stop-color="#172b42"/></linearGradient>
+    <radialGradient id="moon"><stop stop-color="#e8e3d0" stop-opacity=".68"/><stop offset="1" stop-color="#e8e3d0" stop-opacity="0"/></radialGradient>
+    <pattern id="texture" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="4" cy="6" r="1" fill="#fff" fill-opacity=".12"/><circle cx="21" cy="19" r=".8" fill="#070d1a" fill-opacity=".24"/></pattern>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h1600v1000H0z"/><circle cx="1130" cy="340" r="350" fill="url(#moon)"/><circle cx="1130" cy="340" r="94" fill="#e8e3d0" fill-opacity=".72"/>
+  <g fill="#f5e7c7" fill-opacity=".75"><circle cx="830" cy="136" r="4"/><circle cx="927" cy="274" r="3"/><circle cx="1284" cy="176" r="4"/><circle cx="1475" cy="325" r="3"/><circle cx="705" cy="354" r="3"/><circle cx="1050" cy="115" r="3"/></g>
+  <path d="m120 680 360-406 147 186 180-254 477 474H120Z" fill="#252d49"/><path d="m480 274 147 186-101-44-43 45-56-66 34-58 19-63Zm327-68 159 206-104-40-52 59-59-74 38-65 18-86Z" fill="#c9c9d2"/><path d="M0 665c209-58 351-45 541 18 213-74 449-82 1059-3v320H0Z" fill="url(#water)"/>
+  <path d="M0 704c213-24 375 30 547 71 236-63 489-62 1053-15M50 832c199-24 309 21 473 50m250-46c211-43 443-38 761-10" stroke="#a5c6d0" stroke-opacity=".32" stroke-width="8"/>
+  <path d="M0 1000V566h92V425h26v141h88v434Zm-22-463h250v27H-22Zm29-27 95-90 95 90H7Z" fill="#203c48"/><path d="M-32 425h318v33H-32Zm22-45h274v28H-10Z" fill="#b0646d"/><path d="M1060 1000V622h72V495h22v127h74v378Zm-21-396h210v25h-210Zm24-25 81-74 82 74h-163Z" fill="#203c48"/><path d="M1026 495h255v31h-255Zm18-41h219v26h-219Z" fill="#b0646d"/>
+  <g fill="#e5b5ca" fill-opacity=".82"><circle cx="268" cy="250" r="12"/><circle cx="302" cy="224" r="9"/><circle cx="331" cy="261" r="13"/><circle cx="1360" cy="486" r="12"/><circle cx="1397" cy="458" r="9"/><circle cx="1429" cy="493" r="13"/><circle cx="842" cy="175" r="8"/><circle cx="880" cy="196" r="10"/></g>
+  <path fill="url(#texture)" d="M0 0h1600v1000H0z"/>
+</svg>

@@ -29,5 +29,7 @@ function makeScene(name, colorA, colorB, motif) {
 }
 
 await mkdir(output, { recursive: true });
-await Promise.all(scenes.map(([name, colorA, colorB, motif]) => writeFile(join(output, `${name}.svg`), makeScene(name, colorA, colorB, motif))));
-console.log(`Wrote ${scenes.length} self-authored category SVG scenes to ${dirname(output)}`);
+// Anime & Manga uses a separately art-directed pair of local scenery SVGs.
+const generatedScenes = scenes.filter(([name]) => name !== 'anime-manga');
+await Promise.all(generatedScenes.map(([name, colorA, colorB, motif]) => writeFile(join(output, `${name}.svg`), makeScene(name, colorA, colorB, motif))));
+console.log(`Wrote ${generatedScenes.length} self-authored category SVG scenes to ${dirname(output)}`);

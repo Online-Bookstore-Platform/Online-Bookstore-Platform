@@ -89,6 +89,13 @@ export default function CataloguePage() {
   }, [searchDraft, state.q, update]);
 
   const categoryNames = useMemo(() => new Map(options.categories.map(category => [category.id, category.name])), [options.categories]);
+  useEffect(() => {
+    const root = document.documentElement;
+    const firstSelected = state.categories[0];
+    if (firstSelected && categoryNames.has(firstSelected)) root.dataset.category = categoryNames.get(firstSelected);
+    else delete root.dataset.category;
+    return () => { delete root.dataset.category; };
+  }, [categoryNames, state.categories]);
   const chips = activeFilterChips(state, categoryNames, formatPrice);
   const filtered = hasActiveFilters(state);
 
@@ -116,7 +123,7 @@ export default function CataloguePage() {
 
   return (
     <section className={styles.page}>
-      <Container>
+      <Container className={styles.wideContainer}>
         <header className={styles.header}>
           <p className="eyebrow">The collection</p>
           <h1>Find something unexpected.</h1>
