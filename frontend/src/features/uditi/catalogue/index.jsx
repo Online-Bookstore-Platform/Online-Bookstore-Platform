@@ -20,7 +20,7 @@ import FilterPanel from './FilterPanel.jsx';
 import Pagination from './Pagination.jsx';
 import styles from './Catalogue.module.css';
 
-const LOADING = { status: 'loading', books: [], pagination: null, message: '' };
+const LOADING = { status: 'loading', books: [], pagination: null, message: '', notice: '' };
 
 /**
  * Story #3: browse, search, filter and sort the catalogue. Everything shown comes from
@@ -58,8 +58,8 @@ export default function CataloguePage() {
     const controller = new AbortController();
     setResult(previous => ({ ...previous, status: 'loading' }));
     fetchBooks(apiQuery, controller.signal)
-      .then(body => setResult({ status: 'ready', books: body.books, pagination: body.pagination, message: '' }))
-      .catch(error => { if (!isAbort(error)) setResult({ status: 'error', books: [], pagination: null, message: error.message }); });
+      .then(body => setResult({ status: 'ready', books: body.books, pagination: body.pagination, message: '', notice: typeof body.providerNotice === 'string' ? body.providerNotice : '' }))
+      .catch(error => { if (!isAbort(error)) setResult({ status: 'error', books: [], pagination: null, message: error.message, notice: '' }); });
     return () => controller.abort();
   }, [apiQuery, reload]);
 
@@ -150,6 +150,7 @@ export default function CataloguePage() {
 
           <div className={styles.results} aria-busy={status === 'loading'}>
             <h2 className="visually-hidden" tabIndex={-1} ref={resultsHeading}>Search results</h2>
+            {status === 'ready' && result.notice && <p className={styles.notice} role="status">{result.notice}</p>}
             <div className={styles.toolbar}>
               <p className={styles.count} role="status" aria-live="polite">{summary}</p>
               <label className={styles.sort}>
