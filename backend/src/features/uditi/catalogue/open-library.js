@@ -356,6 +356,45 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
     return [...matches.values()].map(localBook).filter(Boolean);
   }
 
+  /** Every active store book (used only when browsing while all discovery providers are down). */
+  async function browseLocalBooks() {
+    if (!pool) return [];
+    const [rows] = await pool.query(
+      `SELECT b.id, b.isbn, b.open_library_work_id, b.title, b.author, b.price, b.description, b.cover_image_url,
+              c.name AS category, COALESCE(i.quantity, 0) AS quantity
+         FROM books b JOIN categories c ON c.id = b.category_id
+         LEFT JOIN inventory i ON i.book_id = b.id
+        WHERE b.is_active = 1 ORDER BY b.title, b.id LIMIT 500`
+    );
+    return rows.map(localBook).filter(Boolean);
+  }
+
+  /**
+   * Plain browsing while every discovery provider is down: show the store's own books with the same
+   * filters and sorting, instead of an error page. Returns null when the price/availability filter is invalid.
+   */
+  function browseStoreBooks(storeBooks, req, { categoryIds, sort, order, page, pageSize }) {
+    const minimumPrice = req.query.minPrice === undefined ? null : Number(req.query.minPrice);
+    const maximumPrice = req.query.maxPrice === undefined ? null : Number(req.query.maxPrice);
+    const availability = String(req.query.availability || 'all');
+    if ((minimumPrice !== null && (!Number.isFinite(minimumPrice) || minimumPrice < 0))
+      || (maximumPrice !== null && (!Number.isFinite(maximumPrice) || maximumPrice < 0))
+      || !['all', 'in_stock', 'out_of_stock'].includes(availability)) return null;
+    let books = storeBooks;
+    if (categoryIds.length) books = books.filter(book => categoryIds.some(id => categoryMatches(book.category, SUBJECTS[Number(id) - 1], book.subjects)));
+    if (minimumPrice !== null) books = books.filter(book => book.price >= minimumPrice);
+    if (maximumPrice !== null) books = books.filter(book => book.price <= maximumPrice);
+    if (availability === 'in_stock') books = books.filter(book => book.storeProduct.available);
+    if (availability === 'out_of_stock') books = books.filter(book => !book.storeProduct.available);
+    const direction = order === 'desc' ? -1 : 1;
+    if (sort === 'author') books = [...books].sort((a, b) => a.author.localeCompare(b.author) * direction || a.title.localeCompare(b.title));
+    else if (sort === 'price') books = [...books].sort((a, b) => (a.price - b.price) * direction || a.title.localeCompare(b.title));
+    else books = [...books].sort((a, b) => a.title.localeCompare(b.title) * (sort === 'title' ? direction : 1));
+    const totalItems = books.length;
+    const start = (page - 1) * pageSize;
+    return { books: books.slice(start, start + pageSize), pagination: { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) } };
+  }
+
   async function findLocalBooksById(id) {
     if (!pool) return null;
     const [rows] = await pool.query(
@@ -472,7 +511,15 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
           providerError = new Error(googleError.code === 'GOOGLE_BOOKS_NOT_CONFIGURED' ? googleError.message : 'Both book metadata providers are unavailable.');
           providerError.code = googleError.code || openLibraryError.code || 'BOOK_PROVIDER_UNAVAILABLE';
           providerError.fallbackConfigured = Boolean(env.GOOGLE_BOOKS_API_KEY);
-          if (!localMatches.length) throw providerError;
+          if (!localMatches.length) {
+            // A search term with no store match stays an actionable retry error. Plain browsing, though,
+            // can still show the store's own books instead of an error page.
+            if (rawQuery || !pool) throw providerError;
+            const browse = browseStoreBooks(await browseLocalBooks(), req, { categoryIds, sort, order, page, pageSize });
+            if (!browse) return res.status(400).json({ error: { code: 'INVALID_FILTER', message: 'Choose a valid store price range and availability filter.' } });
+            res.set('Cache-Control', 'no-store');
+            return res.json({ ...browse, source: 'local', providerNotice: 'Showing local catalogue results while discovery providers are unavailable.' });
+          }
           result = { books: [], totalItems: 0, provider: 'local' };
         }
       }
