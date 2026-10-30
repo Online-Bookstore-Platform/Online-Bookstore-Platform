@@ -1,20 +1,18 @@
 # Folio — Online Bookstore Platform
 
-<p align="center">
-  <strong>Discover books. Explore ideas. Find your next read.</strong>
-</p>
+<div align="center">
 
-<p align="center">
-  A full-stack online bookstore built with React, Express.js, and MySQL, featuring book discovery, user authentication, shopping cart management, checkout, order tracking, reviews, and catalogue administration.
-</p>
+### Discover books. Explore ideas. Find your next read.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/React-Frontend-61DAFB?logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/Node.js-Backend-339933?logo=nodedotjs&logoColor=white" alt="Node.js" />
-  <img src="https://img.shields.io/badge/Express.js-API-000000?logo=express&logoColor=white" alt="Express.js" />
-  <img src="https://img.shields.io/badge/MySQL-Database-4479A1?logo=mysql&logoColor=white" alt="MySQL" />
-  <img src="https://img.shields.io/badge/Vite-Build%20Tool-646CFF?logo=vite&logoColor=white" alt="Vite" />
-</p>
+A full-stack online bookstore built with React, Node.js, Express.js, and MySQL, providing an integrated platform for book discovery, catalogue management, authentication, shopping cart operations, checkout, order tracking, and customer reviews.
+
+[![React](https://img.shields.io/badge/React-Frontend-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Node.js](https://img.shields.io/badge/Node.js-Backend-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Express.js](https://img.shields.io/badge/Express.js-API-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-Database-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![Vite](https://img.shields.io/badge/Vite-Build_Tool-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
+
+</div>
 
 ---
 
@@ -31,7 +29,7 @@
 - [Database Setup](#database-setup)
 - [Running the Application](#running-the-application)
 - [Application Modules](#application-modules)
-- [Catalogue and Book Discovery](#catalogue-and-book-discovery)
+- [Book Discovery and Catalogue](#book-discovery-and-catalogue)
 - [Checkout and Payment Processing](#checkout-and-payment-processing)
 - [Security and Data Integrity](#security-and-data-integrity)
 - [Testing](#testing)
@@ -39,172 +37,196 @@
 - [Troubleshooting](#troubleshooting)
 - [Future Enhancements](#future-enhancements)
 - [Contributing](#contributing)
-- [License](#license)
 
 ## Overview
 
-**Folio** is a full-stack online bookstore application designed to provide readers with a convenient way to discover books, explore categories, review book information, and manage purchases through an integrated shopping experience.
+**Folio** is a full-stack online bookstore application designed to provide readers with a seamless platform for discovering books, exploring categories, accessing detailed book information, and managing purchases.
 
-The platform combines an interactive React frontend with an Express.js backend and a MySQL database. It supports external book discovery, persistent application data, authenticated user workflows, catalogue administration, simulated checkout, and order management.
+The application combines a React-based frontend with an Express.js backend and a MySQL database. It supports external book discovery, user authentication, catalogue administration, shopping cart management, checkout workflows, order tracking, and customer reviews.
 
-Folio is developed as a collaborative software engineering project, with modular features designed to support maintainability, testing, and future extension.
+Developed as a collaborative Software Engineering project, Folio follows a modular architecture that promotes maintainability, scalability, and structured development.
 
 ## Project Objectives
 
-- Build a responsive and user-friendly online bookstore.
-- Provide book discovery across multiple genres and subject areas.
+- Develop a responsive and intuitive online bookstore.
+- Enable efficient book discovery through search and category-based browsing.
 - Implement secure user authentication and account management.
-- Support shopping cart, checkout, and order lifecycle workflows.
-- Provide customer reviews and book detail pages.
-- Enable administrative catalogue and inventory management.
-- Maintain persistent data using MySQL.
-- Demonstrate modular backend architecture, API integration, validation, and automated testing.
+- Support shopping cart and checkout workflows.
+- Provide order history and order status tracking.
+- Enable customers to submit and view book reviews.
+- Implement administrative catalogue and inventory management.
+- Maintain persistent application data using MySQL.
+- Apply software engineering principles through modular development, API integration, validation, and automated testing.
 
 ## Features
 
-### Book Discovery and Catalogue
+### 1. Book Discovery and Catalogue
 
 - Browse books across multiple categories and genres.
-- Search for books and explore their details.
+- Search for books and explore detailed information.
 - Integrate external book discovery providers.
-- Support fallback provider behaviour when available.
-- Display book covers, descriptions, authors, prices, and availability where data is available.
-- Provide category filtering and responsive catalogue layouts.
-- Maintain local product records for supported shopping workflows.
+- Support fallback provider behaviour.
+- Display available book covers, descriptions, authors, and other metadata.
+- Provide category-based filtering and responsive catalogue layouts.
+- Maintain local product records for shopping operations.
 
-### Authentication and User Accounts
+### 2. Authentication and User Management
 
 - User registration and login.
 - Session-based authentication.
 - Account and profile management.
-- Password-reset workflow with expiring reset tokens.
+- Password-reset functionality using expiring reset tokens.
 - Protected routes and authenticated operations.
 
-### Book Details and Reviews
+### 3. Book Details and Reviews
 
 - Dedicated book detail pages.
-- Display book information and available reviews.
-- Support review ratings and review submission for authenticated users.
-- Persist reviews through backend APIs and database storage.
+- Display book descriptions and available information.
+- Display customer reviews and ratings.
+- Allow authenticated users to submit reviews.
+- Persist review information through backend APIs and database storage.
 
-### Shopping Cart
+### 4. Shopping Cart
 
-- Add books to the cart.
-- Update quantities and remove items.
+- Add books to the shopping cart.
+- Update product quantities.
+- Remove products from the cart.
 - Display item prices and order totals.
 - Validate product availability during relevant operations.
 
-### Checkout and Orders
+### 5. Checkout and Order Management
 
-- Review order details before placing an order.
-- Support simulated prepaid payment workflows.
+- Review order details before checkout.
+- Support simulated prepaid checkout workflows.
 - Support Cash on Delivery where configured and eligible.
-- Display order confirmation and order history.
-- Track order and payment statuses separately.
-- Provide appropriate handling for failed, cancelled, or incomplete checkout attempts.
+- Display order confirmation.
+- Maintain order history.
+- Track payment and order statuses independently.
+- Handle unsuccessful, cancelled, and incomplete checkout attempts.
 
-### Catalogue Administration
+### 6. Catalogue and Inventory Administration
 
 - Create and update catalogue entries.
-- Manage product pricing and inventory.
-- Use administrative authorization for protected management operations.
-- Support catalogue and inventory workflows through the application interface.
+- Manage product pricing and stock availability.
+- Provide administrative access controls.
+- Support catalogue and inventory management through the application interface.
 
-### User Interface
+### 7. User Interface and Experience
 
 - Responsive layouts for desktop, tablet, and mobile.
 - Light and dark themes.
-- Category-specific catalogue backgrounds and shared design tokens.
-- Book cards, navigation, forms, and checkout components.
-- Consistent visual styling across major application pages.
+- Consistent styling across application modules.
+- Category-specific catalogue presentation.
+- Reusable UI components and shared design tokens.
 
 ## Technology Stack
 
 | Layer | Technologies |
 |---|---|
 | Frontend | React, JavaScript, Vite |
-| Styling | CSS Modules, global CSS, theme tokens |
+| Styling | CSS Modules, Global CSS, Theme Tokens |
 | Backend | Node.js, Express.js |
 | Database | MySQL |
-| Authentication | Session-based authentication |
-| API integration | Open Library, Google Books fallback |
-| Testing | Project-specific frontend and backend test suites |
-| Version control | Git and GitHub |
+| Authentication | Session-based Authentication |
+| External APIs | Open Library, Google Books |
+| Testing | Frontend and Backend Test Suites |
+| Version Control | Git, GitHub |
 
-The exact dependencies and versions are defined in the project's `package.json` files.
+Dependency versions are maintained in the respective frontend and backend `package.json` files.
 
 ## System Architecture
 
-Folio follows a client-server architecture.
+Folio follows a client-server architecture in which the React frontend communicates with the Express.js backend through HTTP/REST APIs.
+
+The backend handles authentication, request validation, business logic, database operations, and external API integration.
 
 ```text
-                         ┌─────────────────────────┐
-                         │       User / Admin      │
-                         └────────────┬────────────┘
-                                      │
-                                      ▼
-                         ┌─────────────────────────┐
-                         │    React + Vite UI      │
-                         │                         │
-                         │ Catalogue, Cart, Auth,  │
-                         │ Checkout, Orders, Admin │
-                         └────────────┬────────────┘
-                                      │ HTTP / REST
-                                      ▼
-                         ┌─────────────────────────┐
-                         │      Express.js API     │
-                         │                         │
-                         │ Authentication          │
-                         │ Catalogue               │
-                         │ Payments and Orders     │
-                         │ Reviews and Admin       │
-                         └─────────┬───────────────┘
-                                   │
-                    ┌──────────────┴──────────────┐
-                    ▼                             ▼
-         ┌────────────────────┐      ┌────────────────────┐
-         │     MySQL DB       │      │ External Book APIs │
-         │                    │      │                    │
-         │ Users, Books,      │      │ Open Library       │
-         │ Sessions, Orders,  │      │ Google Books       │
-         │ Reviews, Inventory │      │ Fallback provider  │
-         └────────────────────┘      └────────────────────┘
+                       USER / ADMIN
+                            |
+                            |
+                            v
+                  +---------------------+
+                  |    React + Vite     |
+                  |                     |
+                  |  Book Catalogue     |
+                  |  Authentication     |
+                  |  Shopping Cart      |
+                  |  Checkout           |
+                  |  Orders             |
+                  |  Reviews            |
+                  |  Administration     |
+                  +----------+----------+
+                             |
+                         HTTP / REST
+                             |
+                             v
+                  +---------------------+
+                  |     Express.js      |
+                  |                     |
+                  |  Authentication     |
+                  |  Catalogue APIs     |
+                  |  Cart and Orders    |
+                  |  Payment Workflows  |
+                  |  Review Management  |
+                  |  Admin Operations   |
+                  +----------+----------+
+                             |
+                +------------+------------+
+                |                         |
+                v                         v
+        +---------------+       +------------------+
+        |    MySQL      |       | External Book APIs|
+        |               |       |                  |
+        | Users         |       | Open Library     |
+        | Sessions      |       | Google Books     |
+        | Books         |       +------------------+
+        | Orders        |
+        | Reviews       |
+        | Inventory     |
+        +---------------+
 ```
-
-The frontend communicates with the backend through HTTP APIs. The backend handles validation, authentication, business logic, persistence, and integration with external book providers.
 
 ## Project Structure
 
-The repository is organized into frontend and backend applications.
+The repository is organized into separate frontend and backend applications.
 
 ```text
 Online-Bookstore-Platform/
+│
 ├── frontend/
 │   ├── public/
 │   │   ├── backgrounds/
 │   │   └── categories/
+│   │
 │   ├── scripts/
+│   │
 │   ├── src/
 │   │   ├── app/
 │   │   │   └── router.jsx
+│   │   │
 │   │   ├── components/
 │   │   │   └── shared/
+│   │   │
 │   │   ├── features/
 │   │   │   ├── uditi/
 │   │   │   │   ├── catalogue/
 │   │   │   │   ├── checkout/
 │   │   │   │   └── inventory/
+│   │   │   │
 │   │   │   ├── varchas/
 │   │   │   │   ├── admin-catalogue/
 │   │   │   │   ├── authentication/
 │   │   │   │   ├── book-details/
 │   │   │   │   └── payments/
+│   │   │   │
 │   │   │   └── vrinda/
 │   │   │       ├── cart/
 │   │   │       ├── orders/
 │   │   │       └── registration-profile/
+│   │   │
 │   │   ├── pages/
 │   │   └── styles/
+│   │
 │   ├── index.html
 │   └── package.json
 │
@@ -213,12 +235,15 @@ Online-Bookstore-Platform/
 │   │   ├── migrations/
 │   │   ├── schema.sql
 │   │   └── README.md
+│   │
 │   ├── src/
 │   │   ├── features/
 │   │   │   ├── uditi/
 │   │   │   ├── varchas/
 │   │   │   └── vrinda/
+│   │   │
 │   │   └── server.js
+│   │
 │   ├── test/
 │   ├── .env.example
 │   └── package.json
@@ -227,79 +252,91 @@ Online-Bookstore-Platform/
 └── .gitignore
 ```
 
-*This is a representative structure. Some directories or files may vary with the current implementation.*
+*Note: This represents the primary repository structure. Individual files and directories may vary with the current implementation.*
 
 ## Getting Started
 
 ### Prerequisites
 
-Install the following software before running Folio:
+Install the following software before setting up the project:
 
-- [Node.js](https://nodejs.org/) — use a version compatible with the project dependencies.
-- npm, included with Node.js.
-- [MySQL Community Server](https://dev.mysql.com/downloads/mysql/).
-- [Git](https://git-scm.com/).
-- A code editor such as Visual Studio Code.
+- [Node.js](https://nodejs.org/)
+- npm (included with Node.js)
+- [MySQL Community Server](https://dev.mysql.com/downloads/mysql/)
+- [Git](https://git-scm.com/)
+- [Visual Studio Code](https://code.visualstudio.com/) or another code editor.
 
-Optional: MySQL Workbench for database inspection and administration.
+MySQL Workbench is optional and can be used for database inspection and administration.
 
-### 1. Clone the repository
+### 1. Clone the Repository
 
 ```bash
 git clone <YOUR_GITHUB_REPOSITORY_URL>
 cd Online-Bookstore-Platform
 ```
 
-Replace the placeholder with your repository's actual GitHub URL.
+Replace the placeholder with the actual GitHub repository URL.
 
-### 2. Install frontend dependencies
+### 2. Install Frontend Dependencies
 
 ```bash
 cd frontend
 npm install
 ```
 
-### 3. Install backend dependencies
+### 3. Install Backend Dependencies
 
-Open another terminal or return to the repository root:
+Open another terminal and navigate to the backend directory:
 
 ```bash
 cd backend
 npm install
 ```
 
-### 4. Configure environment variables
+### 4. Configure Environment Variables
 
-Create a local environment file based on the backend example:
+Create a local environment file using the provided example.
+
+**Windows PowerShell:**
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Run that command from the `backend` directory in PowerShell.
+**Linux/macOS:**
 
-Edit `backend/.env` with your local configuration. Never commit this file to Git.
+```bash
+cp .env.example .env
+```
 
-### 5. Configure the database
+Update `backend/.env` with your local database credentials and required configuration.
 
-Create the development database, configure the connection settings, and apply the schema and required migrations. See [Database Setup](#database-setup).
+Never commit `.env` files or expose private credentials.
 
-### 6. Start the application
+### 5. Configure the Database
 
-Start the backend and frontend in separate terminals using the scripts defined in their respective `package.json` files.
+- Start the MySQL server.
+- Create the development database.
+- Configure the database credentials in `backend/.env`.
+- Execute the database schema.
+- Apply the required migrations.
 
-The local development URLs are typically:
+Refer to the [Database Setup](#database-setup) section for additional information.
+
+### 6. Start the Application
+
+Run the frontend and backend independently using their respective npm scripts.
+
+Typical development URLs:
 
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:5000`
 
-Confirm the actual ports in the project configuration.
+Verify the configured ports in the project before starting the services.
 
 ## Environment Configuration
 
-The backend uses environment variables for local configuration.
-
-Common configuration keys include:
+The backend uses environment variables for database connectivity, session management, and application configuration.
 
 | Variable | Purpose |
 |---|---|
@@ -310,219 +347,229 @@ Common configuration keys include:
 | `DB_NAME` | Database name |
 | `DB_USER` | Database username |
 | `DB_PASSWORD` | Database password |
-| `DEV_PASSWORD_RESET_LINK` | Enables the explicitly configured development password-reset link behaviour |
-| `VARCHAS_ADAPTER_MODULE` | Optional module for custom backend adapters |
-| `PAYMENT_PROVIDER` | Payment provider configuration, if supported by the active implementation |
-| `FOLIO_CHECKOUT_OUTCOME` | Configured simulated checkout outcome, if enabled by the active implementation |
+| `DEV_PASSWORD_RESET_LINK` | Development password-reset link configuration |
+| `VARCHAS_ADAPTER_MODULE` | Optional backend adapter module |
+| `PAYMENT_PROVIDER` | Payment provider configuration, where supported |
+| `FOLIO_CHECKOUT_OUTCOME` | Simulated checkout outcome configuration, where enabled |
 
-The exact variables required depend on the current backend configuration. Refer to `backend/.env.example` and the backend configuration code for the authoritative list.
+The authoritative environment configuration is maintained in `backend/.env.example` and the backend configuration code.
 
-**Security guidelines:**
+### Security Guidelines
 
-- Never commit `.env` files or real credentials.
-- Keep `.env.example` limited to safe placeholder values.
-- Use strong session secrets outside development.
-- Do not expose database credentials or private API keys in frontend code.
-- Disable development-only reset-link behaviour in production.
-- Never use simulated payment configuration as a substitute for a real payment provider in a production commerce deployment.
+- Never commit environment files or private credentials.
+- Keep `.env.example` restricted to safe placeholder values.
+- Use strong session secrets.
+- Do not expose database credentials in frontend code.
+- Disable development-only password-reset functionality in production.
+- Do not use simulated payment configuration as a replacement for a production payment gateway.
 
 ## Database Setup
 
 Folio uses MySQL for persistent application data.
 
-### Initialize the database
+### Initialize the Database
 
-1. Start your local MySQL server.
-2. Create the database configured in `backend/.env`.
+1. Start the local MySQL server.
+2. Create the database specified in `backend/.env`.
 3. Inspect `backend/database/schema.sql`.
-4. Apply the required SQL migrations from `backend/database/migrations/`.
-5. Verify that the application can connect using the configured database credentials.
+4. Execute the required SQL migrations from `backend/database/migrations/`.
+5. Verify the database connection using the configured credentials.
 
-Consult the database documentation:
+Database documentation:
 
 - `backend/database/README.md`
 - `backend/database/migrations/README.md`
 
-### Migrations
+### Database Migrations
 
 The repository contains migrations for features such as password-reset tokens and Cash on Delivery order support.
 
-Apply migrations according to the project's documented migration procedure. Avoid repeatedly applying non-idempotent migrations or manually modifying production data.
+Apply migrations according to the documented migration procedure.
 
-**Important:** Do not drop or reset an existing database just to initialize the project unless you intentionally want to lose its data. Back up data before making schema changes.
+Avoid repeatedly executing non-idempotent migrations or manually modifying important database records.
+
+**Important:** Back up existing data before performing schema modifications. Do not reset an existing database unless you intentionally want to remove its contents.
 
 ## Running the Application
 
-The frontend and backend run independently during development.
+The frontend and backend operate independently during development.
 
 ### Backend
 
-From the `backend` directory, use the development script defined in `backend/package.json`. A typical setup may use:
-
-```bash
-npm run dev
-```
-
-If the project does not define that script, use the available script listed by:
+Navigate to the backend directory and inspect the available scripts:
 
 ```bash
 npm run
 ```
 
-### Frontend
-
-From the `frontend` directory, use:
+If a development script is configured:
 
 ```bash
 npm run dev
 ```
 
-For a production build:
+### Frontend
+
+Navigate to the frontend directory:
+
+```bash
+npm run dev
+```
+
+### Production Build
+
+From the frontend directory:
 
 ```bash
 npm run build
 ```
 
-Start both applications and verify that the frontend can reach the backend API using the configured development settings.
+After starting both applications, verify that the frontend communicates successfully with the backend API and that the backend can access the MySQL database.
 
 ## Application Modules
 
-### Authentication
+| Module | Description |
+|---|---|
+| Authentication | User registration, login, sessions, and password-reset workflows |
+| Catalogue | Book discovery, search, category filtering, and external API integration |
+| Book Details | Detailed book information and customer reviews |
+| Shopping Cart | Product selection, quantity management, and cart totals |
+| Checkout | Checkout validation and payment-method workflows |
+| Payments | Simulated payment outcomes and payment-status management |
+| Orders | Order history and order-status tracking |
+| Inventory | Stock visibility and inventory management |
+| Admin Catalogue | Administrative catalogue creation, updates, and pricing |
+| Reviews | Customer ratings and review submission |
 
-Handles registration, login, session management, protected operations, and password-reset workflows.
+## Book Discovery and Catalogue
 
-### Catalogue
+Folio integrates external book discovery providers, including **Open Library** and **Google Books** fallback functionality.
 
-Provides book discovery, search, category filtering, book information, and integration with external book providers.
+External APIs may return incomplete information, including missing cover images, descriptions, ISBNs, or subject classifications.
 
-### Book Details
+The application handles these scenarios through:
 
-Displays information about selected books and their available reviews.
+- Normalization of external book data.
+- Handling of missing metadata.
+- Deduplication of overlapping search results.
+- Fallback provider integration where configured.
+- Stable local product identifiers.
+- Database-managed pricing and inventory.
 
-### Cart
+External discovery records and locally managed products may have different capabilities.
 
-Manages selected products and quantities before checkout.
-
-### Checkout and Payments
-
-Handles checkout input, payment method selection, simulated payment outcomes, order creation, and checkout status.
-
-### Orders
-
-Provides order history and order status information. Payment status and fulfilment status should remain distinct.
-
-### Inventory
-
-Supports inventory visibility and management, including stock-related workflows.
-
-### Admin Catalogue
-
-Provides administrative catalogue creation and updates, with access controlled by backend authorization.
-
-### Reviews
-
-Supports ratings and review submission for authenticated users, subject to backend validation and configured data rules.
-
-## Catalogue and Book Discovery
-
-Folio integrates external book discovery sources, including Open Library and Google Books fallback behaviour.
-
-External provider data may vary in completeness. Some books may have missing covers, descriptions, ISBNs, or subject classifications.
-
-The application should handle these cases gracefully by:
-
-- Normalizing book data from different providers.
-- Deduplicating overlapping results.
-- Handling missing metadata.
-- Falling back to another provider when appropriate.
-- Maintaining stable local product identifiers for shopping operations.
-- Keeping local prices and inventory consistent with the application's database.
-
-External discovery results and locally managed products may have different capabilities. Shopping operations must use valid local product records and server-validated prices and availability.
+Shopping cart and checkout operations must use valid local product records, with prices and availability validated by the backend.
 
 ## Checkout and Payment Processing
 
-Folio includes checkout workflows designed to demonstrate an integrated ecommerce experience.
+Folio provides an integrated checkout experience with configurable payment workflows.
 
-Depending on the active configuration, supported payment options may include:
+Depending on the active configuration, payment interfaces may include:
 
-- Card-style simulated checkout.
-- UPI-style simulated checkout.
-- Net banking-style simulated checkout.
-- Cash on Delivery.
+- Card payments.
+- UPI payments.
+- Net banking.
+- Cash on Delivery (COD).
 
-### Simulated payments
+### Simulated Payment Processing
 
-The configured simulated payment flow can represent outcomes such as approved, declined, cancelled, or timed-out checkout attempts.
+The configured prepaid checkout workflow supports simulated outcomes such as:
 
-These outcomes are for application workflow testing. **They do not establish that money has been transferred or that a real payment gateway has processed a transaction.**
+- Approved.
+- Declined.
+- Cancelled.
+- Timed out.
 
-A real payment integration requires an appropriately configured provider, server-side verification, secure webhook handling, and reconciliation of payment status.
+These outcomes are used to exercise checkout, payment-status, and order-management workflows.
+
+A simulated payment does not transfer money or represent a transaction processed by a live payment gateway.
+
+A production payment integration would require:
+
+- A configured payment provider.
+- Server-side transaction verification.
+- Secure webhook handling.
+- Payment-status reconciliation.
 
 ### Cash on Delivery
 
-Cash on Delivery follows a different payment lifecycle from prepaid orders. An order placed with COD must not be treated as prepaid or marked paid before the applicable collection and confirmation process.
+Cash on Delivery follows a different payment lifecycle from prepaid orders.
 
-Order status and payment status should be tracked independently.
+A COD order must not be marked as paid before the applicable payment collection and confirmation process.
+
+Order fulfilment status and payment status must be maintained independently.
 
 ## Security and Data Integrity
 
-Folio is designed around server-side validation and controlled access to application operations.
+Folio incorporates server-side validation and access controls across its primary application workflows.
 
-Important safeguards include:
+Key security considerations include:
 
 - Session-based authentication.
 - Protected administrative operations.
 - Server-side request validation.
 - Database-backed persistence.
-- Password-reset tokens with expiration and single-use handling.
+- Expiring and single-use password-reset tokens.
 - Validation of product identifiers, prices, stock, and order data.
-- Separation of development configuration from committed example configuration.
+- Separation of development configuration from committed example files.
 
-These safeguards should be verified against the current implementation before deployment.
+For production deployment, additional security measures should be reviewed, including:
 
-For production use, additionally review HTTPS, secure cookie settings, CSRF protection where applicable, session expiry and invalidation, rate limiting, database permissions, secret management, logging, and payment-provider security requirements.
+- HTTPS and secure session-cookie settings.
+- CSRF protection where applicable.
+- Session expiration and invalidation.
+- Rate limiting.
+- Database access restrictions.
+- Secure secret management.
+- Application logging and monitoring.
+- Payment-provider verification and webhook security.
 
 ## Testing
 
-The repository includes frontend and backend tests.
+The repository includes frontend and backend test suites.
 
-From each application directory, inspect the available scripts:
+Inspect the available test scripts from the respective application directories:
 
 ```bash
 npm run
 ```
 
-Run the test commands defined in the relevant `package.json` files. Common script names may include:
+Run the configured test command. A common command is:
 
 ```bash
 npm test
 ```
 
-Build the frontend before deployment:
+### Frontend Production Build
 
 ```bash
 cd frontend
 npm run build
 ```
 
-Relevant testing areas include:
+### Recommended Testing Areas
 
-- Authentication and session handling.
-- Password-reset validation and expiration.
-- Catalogue provider fallback and data normalization.
-- Category filtering.
-- Cart and order validation.
+- Authentication and session management.
+- Password-reset validation and token expiration.
+- Catalogue provider fallback.
+- External book data normalization.
+- Search and category filtering.
+- Shopping cart operations.
+- Order creation and validation.
 - Payment outcome handling.
-- Cash on Delivery status handling.
-- Database schema and migration expectations.
-- Frontend rendering and component behaviour.
+- Cash on Delivery status management.
+- Database schema and migrations.
+- Frontend component behaviour.
 
-Some database integration tests may require a configured MySQL test database. Configure the test environment separately and never run destructive integration tests against important development or production data.
+Database integration tests may require a separately configured MySQL test database.
+
+Never execute destructive tests against databases containing important development or production data.
 
 ## Git Workflow
 
-Use feature branches for development and submit changes through pull requests.
+The project uses Git and GitHub for version control and collaborative development.
+
+Use feature branches to organize development work.
 
 ```bash
 git switch -c feature/your-feature
@@ -533,61 +580,68 @@ git commit -m "Describe the change"
 git push -u origin feature/your-feature
 ```
 
-Open a pull request on GitHub after pushing the branch.
+After pushing the branch, create a pull request on GitHub for review.
 
-Before committing:
+### Before Committing
 
 - Review staged changes.
-- Exclude `.env` files, credentials, and generated dependencies.
+- Exclude `.env` files and private credentials.
 - Run relevant tests and builds.
 - Review database migrations.
-- Avoid force-pushing shared branches without an explicit team decision.
+- Avoid force-pushing shared branches without team approval.
+- Use meaningful commit messages.
 
 ## Troubleshooting
 
-| Issue | What to check |
+| Issue | Recommended Checks |
 |---|---|
-| Frontend cannot reach the backend | Confirm backend status, API configuration, and CORS settings. |
-| Database connection fails | Check MySQL service, database name, credentials, and port. |
-| Login or session persistence fails | Review session configuration, cookie settings, and frontend API credentials handling. |
-| Catalogue returns no results | Check provider availability, category mapping, search terms, and filtering logic. |
-| Book covers do not load | Check image URLs, provider metadata, fallback handling, and browser network errors. |
-| Checkout fails | Inspect backend validation, configured simulated outcomes, stock, and order persistence. |
-| COD order is incorrectly marked paid | Verify payment and fulfilment status transitions and the relevant database migration. |
-| Password reset does not work | Check migration status, token expiration, development configuration, and email/reset-link behaviour. |
-| Frontend build fails | Check dependency installation, syntax errors, and build output. |
-| Database integration tests fail | Confirm the test database and required migrations are configured correctly. |
+| Frontend cannot connect to backend | Verify backend status, API configuration, and CORS settings. |
+| Database connection fails | Check MySQL service, host, port, database name, and credentials. |
+| Login or session persistence fails | Review session configuration, cookie settings, and frontend credential handling. |
+| Catalogue returns no results | Check provider availability, search terms, category mapping, and filtering logic. |
+| Book covers do not load | Inspect image URLs, provider metadata, and fallback handling. |
+| Checkout fails | Check backend validation, configured checkout outcomes, stock, and order persistence. |
+| COD order is incorrectly marked as paid | Verify payment-status transitions and database migrations. |
+| Password reset fails | Check migration status, token expiration, and reset-link configuration. |
+| Frontend build fails | Review dependencies, syntax errors, and build output. |
+| Database integration tests fail | Verify test database configuration and migration status. |
 
 ## Future Enhancements
 
-Potential improvements include:
+Potential improvements for future development include:
 
-- Integration with a real payment provider and secure webhook verification.
-- Email-based password recovery and order notifications.
-- Advanced recommendations and personalized book discovery.
-- Improved catalogue ranking and search relevance.
-- Enhanced order fulfilment and tracking.
-- Additional accessibility testing.
-- Performance monitoring and production deployment automation.
-- Expanded integration and end-to-end testing.
+- Integration with a production payment provider.
+- Secure payment verification and webhook processing.
+- Email-based password recovery.
+- Automated order notifications.
+- Personalized book recommendations.
+- Improved search relevance and catalogue ranking.
+- Enhanced order fulfilment and shipment tracking.
+- Expanded accessibility and end-to-end testing.
+- Performance monitoring and deployment automation.
 
-These are potential future enhancements and are not necessarily implemented in the current version.
+These are proposed enhancements and are not necessarily implemented in the current version.
 
 ## Contributing
 
-Contributions should follow the repository's established architecture and team workflow.
+Contributions should follow the repository's existing architecture and development conventions.
 
 1. Create a feature branch.
-2. Make focused changes.
+2. Implement focused and modular changes.
 3. Add or update relevant tests.
-4. Run the appropriate test suites and production build.
-5. Review the staged diff.
-6. Push the branch and open a pull request.
+4. Run the appropriate test suites.
+5. Verify the production build.
+6. Review the staged changes.
+7. Push the branch and create a pull request.
 
-Keep changes modular, document database migrations, and avoid committing secrets or generated files.
+Maintain consistent coding standards, document database migrations, and avoid committing sensitive information or generated files.
 
+---
 
+<div align="center">
 
-<p align="center">
-  <strong>Folio — A better way to discover your next read.</strong>
-</p>
+### Folio
+
+**A better way to discover your next read.**
+
+</div>
