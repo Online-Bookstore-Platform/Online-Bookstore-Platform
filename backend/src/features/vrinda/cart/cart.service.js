@@ -41,7 +41,12 @@ export function createCartService({ pool, withTransaction }) {
         const current = await repository.getItemQuantity(connection, cartId, bookId, { lock: true });
         if (!current) throw notFound('That book is not in your cart.', 'CART_ITEM_NOT_FOUND');
         const book = await repository.findBookAvailability(connection, bookId);
-        if (!book || !book.isActive || Number(book.price) <= 0 || book.quantity < quantity) throw unavailableBook(book);
+        if (!book || !book.isActive || Number(book.price) <= 0) throw unavailableBook(book);
+        if (book.quantity < quantity) {
+          throw new HttpError(409, 'INSUFFICIENT_STOCK', `Only ${book.quantity} ${book.quantity === 1 ? 'copy is' : 'copies are'} available.`, [
+            { bookId, title: book.title, requested: quantity, available: book.quantity },
+          ]);
+        }
         await repository.setItemQuantity(connection, cartId, bookId, quantity);
         return repository.getCart(connection, userId);
       });

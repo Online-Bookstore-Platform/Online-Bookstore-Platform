@@ -7,7 +7,7 @@ export default function Footer() {
     <div className={styles.top}><div><Link className={styles.brand} to="/">folio<span>.</span></Link><p>A little more room for the stories<br />that stay with you.</p></div>
       <div className={styles.column}><h2>Explore</h2><Link to="/catalogue">Discover books</Link><a href="/#categories">Categories</a><Link to="/about">Our point of view</Link></div>
       <div className={styles.column}><h2>Your folio</h2><Link to="/login">Account</Link><Link to="/cart">Cart</Link><Link to="/orders">Orders</Link></div>
-      <div className={styles.column}><h2>Here to help</h2><a href="mailto:hello@folio.example">Get in touch</a><Link to="/profile">Your profile</Link></div>
+      <div className={styles.column}><h2>Here to help</h2><Link to="/about#contact">Get in touch</Link><Link to="/profile">Your profile</Link></div>
     </div><div className={styles.bottom}><span>© 2026 folio. A project prototype.</span><span>Made for the love of a good story.</span></div>
   </Container></footer>;
 }

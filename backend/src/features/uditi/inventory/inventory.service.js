@@ -7,8 +7,8 @@
  *        Read-only. Tells the customer early which books cannot be bought in the
  *        quantity they chose. Stock can still change before they pay.
  *
- *   2. After the payment provider confirmed the payment, inside ONE transaction
- *      together with recording the payment/order change:
+ *   2. After Gmail OTP confirms the simulated payment, inside ONE transaction
+ *      together with creating the order and successful payment record:
  *
  *        await withTransaction(pool, async connection => {
  *          await deductStock(connection, items);   // throws InsufficientStockError

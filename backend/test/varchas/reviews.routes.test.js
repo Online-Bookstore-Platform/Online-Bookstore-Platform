@@ -45,7 +45,7 @@ test('reviews support numeric local book IDs and bind the authenticated reviewer
   });
 });
 
-test('production review reads explicitly exclude demo rows and summaries', async () => {
+test('customer review listings exclude preview rows in every environment', async () => {
   const queries = [];
   const pool = { async query(sql) {
     queries.push(sql);
@@ -53,10 +53,11 @@ test('production review reads explicitly exclude demo rows and summaries', async
     if (sql.includes('AND r.is_demo = 0')) return [[{ count: 0, average: null }]];
     throw new Error(`Unexpected SQL: ${sql}`);
   } };
-  await withServer(pool, { NODE_ENV: 'production' }, async origin => {
+  await withServer(pool, { NODE_ENV: 'development' }, async origin => {
     const response = await fetch(`${origin}/api/books/works%2FOL123W/reviews`);
     assert.equal(response.status, 200);
-    assert.ok(queries.some(sql => sql.includes('AND r.is_demo = 0')));
+    assert.ok(queries.filter(sql => sql.includes('FROM book_reviews')).every(sql => sql.includes('is_demo = 0')));
     assert.ok(queries.every(sql => !sql.includes('is_demo = 1')));
+    assert.ok(!JSON.stringify(await response.json()).match(/demo|sample/i));
   });
 });

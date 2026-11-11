@@ -5,9 +5,10 @@ import { withTransaction } from '../uditi/shared/transaction.js';
 import { createRegistrationProfileRouter } from './registration-profile/registration-profile.routes.js';
 import { createCartRouter } from './cart/cart.routes.js';
 import { createOrdersRouter } from './orders/orders.routes.js';
+import { createAdminOrdersRouter } from './orders/admin-orders.routes.js';
 import { unavailableDependency, vrindaErrorHandler } from './shared/errors.js';
 
-export function createVrindaRouter({ pool, requireAuth } = {}) {
+export function createVrindaRouter({ pool, requireAuth, requireAdmin } = {}) {
   const router = Router();
   const missing = message => (_request, _response, next) => next(unavailableDependency(message));
 
@@ -22,6 +23,7 @@ export function createVrindaRouter({ pool, requireAuth } = {}) {
     } else {
       router.use('/cart', createCartRouter({ pool, requireAuth }));
       router.use('/orders', createOrdersRouter({ pool, requireAuth, checkAvailability, withTransaction, deductStock }));
+      if (requireAdmin) router.use('/admin/orders', createAdminOrdersRouter({ pool, requireAdmin }));
     }
   }
 
@@ -32,4 +34,5 @@ export function createVrindaRouter({ pool, requireAuth } = {}) {
 export { createRegistrationProfileRouter } from './registration-profile/registration-profile.routes.js';
 export { createCartRouter } from './cart/cart.routes.js';
 export { createOrdersRouter } from './orders/orders.routes.js';
+export { createAdminOrdersRouter } from './orders/admin-orders.routes.js';
 export { createVrindaOrderService } from './orders/orders.service.js';

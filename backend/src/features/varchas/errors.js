@@ -10,10 +10,10 @@ export function asyncHandler(handler) {
   return (request, response, next) => Promise.resolve(handler(request, response, next)).catch(next);
 }
 
-export function unavailableDependency(name) {
+export function unavailableDependency(_name) {
   return new Proxy({}, {
     get: (_target, method) => async () => {
-      throw new HttpError(503, 'DEPENDENCY_NOT_CONFIGURED', `${name}.${String(method)} is not connected to the project database/service contract yet.`);
+      throw new HttpError(503, 'DEPENDENCY_NOT_CONFIGURED', 'This service is temporarily unavailable. Please try again shortly.');
     },
   });
 }

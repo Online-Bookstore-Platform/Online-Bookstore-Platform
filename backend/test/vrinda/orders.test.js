@@ -33,7 +33,7 @@ test('COD confirms an order as pending collection, deducts stock, and creates no
       if (sql.startsWith('SELECT id FROM carts')) return [[{ id: 5 }]];
       if (sql.startsWith('SELECT ci.book_id AS bookId')) return [[{ bookId: 3, quantity: 1, title: 'A Good Book', unitPrice: 12.5 }]];
       if (sql.startsWith('INSERT INTO orders')) return [{ insertId: 21 }];
-      if (sql.startsWith('SELECT id, order_number AS orderNumber')) return [[{ id: 21, orderNumber: 'order-21', status: 'pending_collection', paymentMethod: 'cod', paymentStatus: 'pending_collection', totalAmount: 12.5, currency: 'INR' }]];
+      if (sql.startsWith('SELECT orders.id, orders.order_number AS orderNumber')) return [[{ id: 21, orderNumber: 'order-21', status: 'pending_collection', paymentMethod: 'cod', paymentStatus: 'pending_collection', totalAmount: 12.5, currency: 'INR' }]];
       if (sql.startsWith('SELECT book_id AS bookId')) return [[{ bookId: 3, title: 'A Good Book', quantity: 1, unitPrice: 12.5 }]];
       if (sql.startsWith('SELECT from_status AS fromStatus')) return [[{ fromStatus: null, toStatus: 'pending_collection', note: 'Cash due on delivery' }]];
       if (sql.startsWith('SELECT status, amount, currency')) return [[]];
@@ -60,7 +60,7 @@ test('draft creation snapshots server prices and clears only the owner cart', as
       if (sql.startsWith('SELECT id FROM carts')) return [[{ id: 5 }]];
       if (sql.startsWith('SELECT ci.book_id AS bookId')) return [[{ bookId: 3, quantity: 2, title: 'A Good Book', unitPrice: 12.5 }]];
       if (sql.startsWith('INSERT INTO orders')) return [{ insertId: 21 }];
-      if (sql.startsWith('SELECT id, order_number AS orderNumber')) {
+      if (sql.startsWith('SELECT orders.id, orders.order_number AS orderNumber')) {
         return [[{ id: 21, orderNumber: 'order-21', status: 'pending', totalAmount: 25, currency: 'INR', createdAt: new Date() }]];
       }
       if (sql.startsWith('SELECT book_id AS bookId')) return [[{ bookId: 3, title: 'A Good Book', quantity: 2, unitPrice: 12.5 }]];
@@ -107,7 +107,7 @@ test('saved payment attempts are returned with an owned order', async () => {
   const service = createOrdersService({
     pool: {
       async query(sql) {
-        if (sql.startsWith('SELECT id, order_number AS orderNumber')) return [[{ id: 72, orderNumber: 'order-72', status: 'paid', totalAmount: 25, currency: 'INR' }]];
+        if (sql.startsWith('SELECT orders.id, orders.order_number AS orderNumber')) return [[{ id: 72, orderNumber: 'order-72', status: 'confirmed', totalAmount: 25, currency: 'INR' }]];
         if (sql.startsWith('SELECT status, amount, currency, created_at AS createdAt')) return [[{ status: 'succeeded', amount: 25, currency: 'INR' }]];
         return [[]];
       },
@@ -125,7 +125,7 @@ test('successful payment updates status and deducts stock inside the supplied tr
   const db = {
     async query(sql, params) {
       statements.push({ sql, params });
-      if (sql.startsWith('SELECT id, status FROM orders')) return [[{ id: 21, status: 'pending' }]];
+      if (sql.startsWith('SELECT id, status, stock_reserved')) return [[{ id: 21, status: 'pending', stockReserved: false }]];
       if (sql.startsWith('SELECT book_id AS bookId')) return [[{ bookId: 3, quantity: 2 }]];
       if (sql.startsWith('UPDATE orders SET status')) return [{ affectedRows: 1 }];
       return [{ affectedRows: 1, insertId: 1 }];
@@ -147,7 +147,8 @@ test('successful payment updates status and deducts stock inside the supplied tr
     paymentUpdate: async connection => { assert.equal(connection, db); return { status: 'succeeded' }; },
   });
 
-  assert.deepEqual(result, { orderId: 21, status: 'paid', paymentAttempt: { status: 'succeeded' } });
+  assert.deepEqual(result, { orderId: 21, status: 'confirmed', paymentAttempt: { status: 'succeeded' } });
   assert.deepEqual(deducted, [{ bookId: 3, quantity: 2 }]);
-  assert.ok(statements.some(statement => statement.sql.startsWith('INSERT INTO order_status_history') && statement.params[1] === 'pending' && statement.params[2] === 'paid'));
+  assert.ok(statements.some(statement => statement.sql.startsWith('INSERT INTO order_status_history') && statement.params[1] === 'pending' && statement.params[2] === 'confirmed'));
+  assert.ok(statements.some(statement => statement.sql.startsWith('UPDATE orders SET payment_status')));
 });

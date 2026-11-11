@@ -6,7 +6,7 @@ MySQL 8.0.16+ (InnoDB, utf8mb4). One schema file, one optional sample-data file,
 |---|---|
 | `schema.sql` | All tables, keys, constraints and indexes |
 | `seed.sql` | Optional sample data for local demos (25 public-domain books, 7 categories, 3 demo accounts, one ready cart) |
-| `setup.js` | Creates the database, applies `schema.sql`, optionally loads `seed.sql` |
+| `setup.js` | Creates a database, applies `schema.sql` or upgrades an existing database through recorded additive migrations |
 | `../src/config/database.js` | `createDatabasePool()` – the connection pool every feature should share |
 
 ## Set up
@@ -15,7 +15,7 @@ MySQL 8.0.16+ (InnoDB, utf8mb4). One schema file, one optional sample-data file,
 cd backend
 npm install
 cp .env.example .env        # then fill in DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
-npm run db:setup            # create the database if missing and apply the schema (does nothing if it already exists)
+npm run db:setup            # create/apply current schema or safely apply pending supported migrations
 npm run db:setup -- --seed  # ...and load the sample data (only into a database that has no tables yet)
 npm run db:reset            # DROP the database, recreate it, apply schema + sample data (refused when NODE_ENV=production)
 ```
@@ -33,11 +33,24 @@ To sign in with the three demo accounts, set `SEED_DEMO_PASSWORD` (8–200 chara
 | `OPEN_LIBRARY_USER_AGENT` | Optional Open Library client identifier |
 | `SEED_DEMO_PASSWORD` | Optional, local demos only |
 
-### Password reset (local development)
+### Email OTP password reset
 
-There is no outbound email adapter configured in this project. Apply `migrations/20261028_create_password_reset_tokens.sql` to an existing database (new setups already include the table), run the backend outside production on localhost, set `DEV_PASSWORD_RESET_LINK=true` in the local backend environment, and submit the email at `/forgot-password`. The UI then shows a local-only reset link. This developer switch is disabled by default, ignored in production, and reset tokens are never written to logs. The link expires after 30 minutes, can be used once, and resetting a password revokes the user’s database sessions. Production reset delivery needs an email provider adapter before enabling customer resets; production responses never return the token.
+Folio sends a six-digit code through Gmail SMTP (Nodemailer). Set `EMAIL_FROM`,
+`GMAIL_USER`, and a Google App Password in `backend/.env`; never use a Gmail
+account password. Missing values produce a clear `EMAIL_PROVIDER_NOT_CONFIGURED`
+response. Codes are stored as keyed hashes for five minutes, are single-use,
+have a five-attempt limit and a 60-second resend cooldown. A successful reset
+changes the bcrypt password hash and deletes all sessions for that user.
 
-There is no migration framework: the schema is one reviewed file. During development change `schema.sql` and run `npm run db:reset`; once real data exists, ship an `ALTER` script next to it and keep `schema.sql` equal to the end result.
+### Migrations and order/payment state
+
+`npm run db:setup` is safe to run on existing databases and applies recorded,
+additive migrations without dropping application data. New databases get the
+same end-state from `schema.sql`. See `migrations/README.md` for ordering and
+manual recovery. Orders have independent fulfilment and payment states. Online
+inventory changes only after Gmail OTP verification; failed verification leaves
+the cart and stock unchanged. COD is deducted and reserved at placement, then
+restored if cancelled before shipping.
 
 ## Tables
 
@@ -72,14 +85,15 @@ Orders and payments are never cascade-deleted with their user or books (`ON DELE
 
 ### Status values
 
-* **`orders.status`**: `pending → paid → confirmed → processing → shipped → delivered`; `pending → payment_failed → pending` (customer retries payment); `cancelled` (allowed before shipping). The database restricts the *values*; the order service (Vrinda) enforces the *transitions* and writes `order_status_history`.
+* **`orders.status`** (fulfilment): `pending → confirmed → processing → packed → shipped → out_for_delivery → delivered`; COD starts `pending_collection → confirmed`. Returns use `delivered → return_requested → returned`. Payment success never sets delivery status. The admin order service validates transitions and writes `order_status_history`.
+* **`orders.payment_status`**: `pending`, `pending_collection`, `succeeded`, `failed`, `collected`; kept separate from fulfilment.
 * **`payments.status`**: `pending`, `succeeded`, `failed`, `cancelled`, `timed_out` – exactly the outcomes the payment feature uses.
 
 ### Payment guarantees the database enforces
 
 * `idempotency_key` is **globally unique** – a retried payment request can only ever create one attempt.
 * At most **one `pending`** attempt per order, and at most **one `succeeded`** payment per order (STORED generated columns `active_order_id` / `succeeded_order_id` with unique keys). An order can never be paid twice; a new attempt is allowed once the previous one is `failed`, `cancelled` or `timed_out`.
-* `provider_reference` (the provider's id, never card data) is unique when present; `amount > 0`.
+* `provider_reference` is a unique Folio simulation reference, never financial credentials; `amount > 0`.
 * No card numbers, CVV or expiry are stored anywhere (SEC-7).
 
 ## Data contract
@@ -94,13 +108,13 @@ Orders and payments are never cascade-deleted with their user or books (`ON DELE
 4. Never delete users, books, orders or payments that are referenced; deactivate instead.
 5. Not invent parallel tables for carts, orders, payments or users.
 
-**Suggested purchase flow** (agree the exact sequence between Vrinda and Varchas; both variants are supported by the inventory functions):
+**Purchase flow:**
 
 1. Checkout (`GET /api/checkout/summary`) re-reads prices and checks stock, read-only.
-2. Order created (Vrinda), in one transaction: re-check, insert `orders` (+ `order_items` with price/title snapshots, delivery copied from `delivery_details`, `order_status_history` first row). Order total = sum of the snapshot prices.
-3. Payment attempt (Varchas) against `orders.id` with the server-side `total_amount`.
-4. When the provider confirms success, **in one transaction**: `deductStock(connection, items)` → mark payment `succeeded` → order `paid` → history row. If stock ran out in the meantime `deductStock` throws `InsufficientStockError` (HTTP 409) and everything rolls back, so the payment must be refunded/voided by the payment feature. (If the team prefers to reserve stock when the order is created, call `deductStock` in step 2 and `restoreStock` on `payment_failed`/`cancelled`; the functions work either way.)
-5. Cancelling an unshipped order calls `restoreStock` in the cancellation transaction (BR-2).
+2. Varchas sends a Gmail OTP for the chosen demonstration method. No online order or payment row exists yet.
+3. On valid OTP, one transaction rechecks cart, prices, delivery, and stock; creates the order; deducts inventory; records simulated success; confirms fulfillment; and clears the cart.
+4. Incorrect, expired, or exhausted OTPs create no order and leave the cart and stock unchanged. Repeated successful submissions reuse the same order.
+5. COD deducts and holds stock when placed; cancellation before shipment restores it. Order fulfillment proceeds independently of payment collection status.
 
 ### Field mapping for Varchas's adapters (`backend/src/features/varchas/README.md`)
 

@@ -9,8 +9,8 @@
  * throw-away MySQL database built from database/schema.sql, real sessions, real bcrypt hashing,
  * real payment/order/inventory transactions.
  * What is not: the external book providers (Open Library / Google Books) are forced offline so the
- * run is deterministic and needs no internet, and the payment "gateway" is the project's internal
- * provider (FOLIO_CHECKOUT_OUTCOME), exactly as the application ships it.
+ * run is deterministic and needs no internet. Gmail delivery is replaced with a test mail sink;
+ * the code is captured only inside this test harness and never returned by the API.
  *
  * Known defects are written as `todo` tests: they describe the behaviour the SRS requires, run on
  * every build, do not fail the suite, and start passing (and can be promoted to normal tests) as
@@ -45,9 +45,12 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
   let testDb; let db; let f; let store; let realFetch;
   const servers = [];
   const ids = {};
+  const mailedPaymentCodes = new Map();
+  const mailedOrderConfirmations = new Map();
+  const mailedOrderConfirmationCounts = new Map();
 
   /** Boot the real app (same wiring as src/server.js) on a random port. */
-  async function startApp(outcome = 'approved') {
+  async function startApp() {
     const users = {
       async findByEmail(email) {
         const [rows] = await db.query('SELECT id, name, email, role, password_hash AS passwordHash FROM users WHERE email = ? LIMIT 1', [email]);
@@ -65,10 +68,20 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       payments: createMySqlPaymentsRepository(db),
       orders: createVrindaOrderService({ pool: db }),
     };
-    const app = createApp({ repositories, pool: db, sessionStore: store, sessionSecret: SECRET, env: { ...process.env, NODE_ENV: 'test', FOLIO_CHECKOUT_OUTCOME: outcome } });
+    const emailService = {
+      configured: true,
+      async sendPaymentOtp(message) { mailedPaymentCodes.set(message.to, message.otp); },
+      async sendPasswordResetOtp() {},
+      async sendOrderConfirmation(message) {
+        mailedOrderConfirmations.set(message.to, message.order);
+        mailedOrderConfirmationCounts.set(message.to, (mailedOrderConfirmationCounts.get(message.to) || 0) + 1);
+      },
+    };
+    const app = createApp({ repositories, pool: db, sessionStore: store, sessionSecret: SECRET, emailService, env: { ...process.env, NODE_ENV: 'test', SESSION_SECRET: SECRET } });
     const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
     servers.push(server);
-    return `http://127.0.0.1:${server.address().port}`;
+    const base = `http://127.0.0.1:${server.address().port}`;
+    return base;
   }
 
   /** A signed-in session, created the way a successful login creates it. */
@@ -80,7 +93,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
   }
 
   /** Small HTTP client: optional cookie, JSON in/out. */
-  function api(base, cookie = '') {
+  function api(base, cookie = '', userId = null) {
     let jar = cookie;
     async function call(method, path, body, headers = {}) {
       const response = await fetch(base + path, {
@@ -98,6 +111,8 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       return { status: response.status, json, text, headers: response.headers, cookie: jar };
     }
     return {
+      base,
+      userId,
       get: (path, headers) => call('GET', path, undefined, headers),
       post: (path, body = {}, headers) => call('POST', path, body, headers),
       put: (path, body, headers) => call('PUT', path, body, headers),
@@ -109,8 +124,21 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
 
   const stock = async bookId => Number((await db.query('SELECT quantity FROM inventory WHERE book_id = ?', [bookId]))[0][0].quantity);
   const count = async (sqlText, params = []) => Number((await db.query(sqlText, params))[0][0].n);
-  const draft = (client, extra = {}, key = randomUUID()) => client.post('/api/orders/draft', { delivery: DELIVERY, ...extra }, { 'Idempotency-Key': key });
-  const pay = (client, orderId, key = randomUUID()) => client.post(`/api/payments/orders/${orderId}`, {}, { 'Idempotency-Key': key });
+  const draft = (client, extra = {}, key = randomUUID()) => client.post('/api/orders/draft', { delivery: DELIVERY, paymentMethod: 'cod', ...extra }, { 'Idempotency-Key': key });
+  async function requestPaymentOtp(client, paymentMethod = 'card') {
+    if (client.userId) await client.put('/api/checkout/delivery', DELIVERY);
+    return client.post('/api/payments/otp', { paymentMethod });
+  }
+  async function verifyPaymentOtp(client, challengeId, otp) {
+    return client.post('/api/payments/otp/verify', { challengeId, otp });
+  }
+  async function pay(client, paymentMethod = 'card') {
+    const initiated = await requestPaymentOtp(client, paymentMethod);
+    if (initiated.status !== 201) return initiated;
+    const [[row]] = await db.query('SELECT email FROM users WHERE id = ?', [client.userId]);
+    const otp = mailedPaymentCodes.get(row.email);
+    return verifyPaymentOtp(client, initiated.json.challenge.challengeId, otp);
+  }
   const sortedTitles = books => books.map(book => book.title);
 
   /** Give a customer a fresh cart containing the given lines and return a client. */
@@ -118,7 +146,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
     const userId = await f.addUser();
     await db.query('DELETE ci FROM cart_items ci JOIN carts c ON c.id = ci.cart_id WHERE c.user_id = ?', [userId]);
     if (lines.length) await f.fillCart(userId, lines);
-    return { userId, client: api(base, await sessionFor(userId)) };
+    return { userId, client: api(base, await sessionFor(userId), userId) };
   }
 
   before(async () => {
@@ -144,10 +172,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
 
     ids.admin = await f.addUser({ name: 'Store Admin', email: 'admin@stp.example', role: 'admin', password_hash: await hashPassword(PASSWORD) });
     ids.asha = await f.addUser({ name: 'Asha Rao', email: 'asha@stp.example', phone: '9876543210', password_hash: await hashPassword(PASSWORD) });
-    ids.base = await startApp('approved');
-    ids.baseDeclined = await startApp('declined');
-    ids.baseCancelled = await startApp('cancelled');
-    ids.baseTimeout = await startApp('timeout');
+    ids.base = await startApp();
   });
 
   after(async () => {
@@ -391,89 +416,132 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
 
   // ---------------------------------------------------------------- SRS 5.5 Payment, 5.6 Orders, 5.7 Inventory
   describe('SRS 5.5 payment, SRS 5.6 orders, SRS 5.7 / BR-1 inventory', () => {
-    it('TC-PAY-01 / TC-ORD-01 / TC-INV-01 successful purchase: order id, paid status, history, stock decremented, cart cleared', async () => {
+    it('TC-PAY-01 / TC-ORD-01 / TC-INV-01 verified Gmail OTP atomically creates a paid demo order and deducts stock once', async () => {
       const startStock = await stock(ids.hound);
       const { userId, client } = await customerWith(ids.base, [{ bookId: ids.hound, quantity: 2 }]);
-      const created = await draft(client);
-      assert.equal(created.status, 201, created.text);
-      const order = created.json.order;
-      assert.equal(order.status, 'pending');
-      assert.equal(order.totalAmount, 398);
-      assert.ok(order.orderNumber && order.orderNumber.length >= 4, 'a customer-facing order id exists');
-      assert.equal(await stock(ids.hound), startStock, 'creating an order does not take stock yet');
-      assert.equal((await client.get('/api/cart')).json.cart.itemCount, 0, 'the cart is emptied by the order');
+      const initiated = await requestPaymentOtp(client, 'upi');
+      assert.equal(initiated.status, 201, initiated.text);
+      assert.equal(initiated.json.challenge.otp, undefined, 'the OTP never appears in the API response');
+      const [[beforeOrder]] = await db.query('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [userId]);
+      assert.equal(Number(beforeOrder.n), 0, 'no order is created before OTP verification');
+      assert.equal(await stock(ids.hound), startStock, 'no inventory is deducted before OTP verification');
+      assert.equal((await client.get('/api/cart')).json.cart.itemCount, 2, 'cart stays intact until successful verification');
 
-      const paid = await pay(client, order.id);
+      const [[user]] = await db.query('SELECT email FROM users WHERE id = ?', [userId]);
+      const otp = mailedPaymentCodes.get(user.email);
+      const paid = await verifyPaymentOtp(client, initiated.json.challenge.challengeId, otp);
       assert.equal(paid.status, 201, paid.text);
-      assert.equal(paid.json.attempt.status, 'succeeded');
-      assert.equal(paid.json.attempt.amount, 398, 'the amount charged is the server-side order total');
-      assert.equal(await stock(ids.hound), startStock - 2, 'TC-INV-01 stock decreases by the purchased quantity');
+      const order = paid.json.order;
+      const confirmation = mailedOrderConfirmations.get(user.email);
+      assert.ok(confirmation, 'confirmation was dispatched to the registered account after the order transaction committed');
+      assert.equal(confirmation.id, order.id);
+      assert.equal(confirmation.email, user.email);
+      assert.equal(confirmation.items[0].title, order.items[0].title);
+      assert.equal(confirmation.items[0].quantity, 2);
+      assert.equal(Number(confirmation.items[0].unitPrice), Number(order.items[0].unitPrice));
+      assert.equal(confirmation.addressLine1, order.addressLine1);
+      assert.equal(confirmation.paymentMethod, 'upi');
+      assert.equal(confirmation.paymentStatus, 'succeeded');
+      assert.equal(confirmation.status, 'confirmed');
+      assert.equal(order.status, 'confirmed');
+      assert.equal(order.paymentStatus, 'succeeded');
+      assert.equal(order.paymentMethod, 'upi');
+      assert.equal(order.totalAmount, 398, 'the server-calculated cart total is persisted');
+      assert.ok(order.orderNumber && order.orderNumber.length >= 4, 'a customer-facing order id exists');
+      assert.equal(await stock(ids.hound), startStock - 2, 'TC-INV-01 stock is deducted atomically once');
+      assert.equal((await client.get('/api/cart')).json.cart.itemCount, 0, 'the cart is cleared only after OTP verification');
+
       const detail = (await client.get(`/api/orders/${order.id}`)).json.order;
-      assert.equal(detail.status, 'paid');
-      assert.deepEqual(detail.statusHistory.map(entry => entry.toStatus), ['pending', 'paid']);
+      assert.equal(detail.status, 'confirmed');
+      assert.equal(detail.paymentStatus, 'succeeded');
+      assert.deepEqual(detail.statusHistory.map(entry => entry.toStatus), ['pending', 'confirmed']);
       assert.equal(detail.items[0].unitPrice, 199);
-      assert.equal(await count("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND status = 'paid'", [userId]), 1);
+      assert.equal(await count("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND status = 'confirmed'", [userId]), 1);
+      assert.equal(await count("SELECT COUNT(*) AS n FROM payments WHERE order_id = ? AND status = 'succeeded' AND provider_reference LIKE 'folio-demo-%'", [order.id]), 1);
+      const [[deliveryStatus]] = await db.query('SELECT status, attempts FROM order_confirmation_email_deliveries WHERE order_id = ?', [order.id]);
+      assert.equal(deliveryStatus.status, 'sent');
+      assert.equal(Number(deliveryStatus.attempts), 1);
     });
 
     it('TC-ORD-01 every order gets its own unique order id', async () => {
       const seen = new Set();
       for (let i = 0; i < 3; i += 1) {
         const { client } = await customerWith(ids.base, [{ bookId: ids.pride, quantity: 1 }]);
-        seen.add((await draft(client)).json.order.orderNumber);
+        seen.add((await pay(client)).json.order.orderNumber);
       }
       assert.equal(seen.size, 3);
     });
 
-    it('TC-PAY-02 declined, cancelled and timed-out payments leave the order unpaid, stock untouched and the customer able to retry', async () => {
-      for (const [base, status] of [[ids.baseDeclined, 'failed'], [ids.baseCancelled, 'cancelled'], [ids.baseTimeout, 'timed_out']]) {
-        const before = await stock(ids.moonstone);
-        const { userId, client } = await customerWith(base, [{ bookId: ids.moonstone, quantity: 1 }]);
-        const order = (await draft(client)).json.order;
-        const failed = await pay(client, order.id);
-        assert.equal(failed.json.attempt.status, status, failed.text);
-        assert.equal(await stock(ids.moonstone), before, `${status}: stock is unchanged`);
-        assert.notEqual((await client.get(`/api/orders/${order.id}`)).json.order.status, 'paid');
-        assert.equal(await count("SELECT COUNT(*) AS n FROM payments WHERE order_id = ? AND status = 'succeeded'", [order.id]), 0);
-        // The same order can be paid later (here through an instance whose payment succeeds).
-        const retryClient = api(ids.base, await sessionFor(userId));
-        const retried = await pay(retryClient, order.id);
-        assert.equal(retried.json.attempt.status, 'succeeded', `${status}: retry -> ${retried.text}`);
-        assert.equal(await stock(ids.moonstone), before - 1);
-      }
+    it('TC-PAY-02 incorrect and expired codes create no order and leave cart/inventory untouched', async () => {
+      const before = await stock(ids.moonstone);
+      const { userId, client } = await customerWith(ids.base, [{ bookId: ids.moonstone, quantity: 1 }]);
+      const initiated = await requestPaymentOtp(client, 'card');
+      const [[user]] = await db.query('SELECT email FROM users WHERE id = ?', [userId]);
+      const otp = mailedPaymentCodes.get(user.email);
+      const wrong = await verifyPaymentOtp(client, initiated.json.challenge.challengeId, '000000');
+      assert.equal(wrong.status, 400);
+      assert.equal(wrong.json.error.code, 'PAYMENT_OTP_INCORRECT');
+      const [[countBefore]] = await db.query('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [userId]);
+      assert.equal(Number(countBefore.n), 0);
+      assert.equal(await stock(ids.moonstone), before);
+      await db.query('UPDATE payment_otp_challenges SET expires_at = UTC_TIMESTAMP() - INTERVAL 1 SECOND WHERE id = ?', [initiated.json.challenge.challengeId]);
+      const expired = await verifyPaymentOtp(client, initiated.json.challenge.challengeId, otp);
+      assert.equal(expired.status, 410);
+      assert.equal(expired.json.error.code, 'PAYMENT_OTP_EXPIRED');
+      const [[countAfter]] = await db.query('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [userId]);
+      assert.equal(Number(countAfter.n), 0);
+      assert.equal((await client.get('/api/cart')).json.cart.itemCount, 1);
+      assert.equal(await stock(ids.moonstone), before);
     });
 
-    it('TC-PAY-03 / SEC-7 duplicate payment request, double payment, card data and missing idempotency key', async () => {
-      const { client } = await customerWith(ids.base, [{ bookId: ids.hound, quantity: 1 }]);
-      const order = (await draft(client)).json.order;
-      assert.equal((await client.post(`/api/payments/orders/${order.id}`, {})).status, 400, 'an Idempotency-Key header is required');
-      const cardData = await client.post(`/api/payments/orders/${order.id}`, { cardNumber: '4111111111111111', cvv: '123' }, { 'Idempotency-Key': randomUUID() });
-      assert.equal(cardData.status, 400);
-      assert.equal(cardData.json.error.code, 'PAYMENT_DATA_NOT_ACCEPTED', 'raw card data is refused, never stored');
-
-      const key = randomUUID();
+    it('TC-PAY-03 / SEC-7 a verified OTP is single-use and duplicate submissions reuse exactly one order/payment', async () => {
+      const { userId, client } = await customerWith(ids.base, [{ bookId: ids.hound, quantity: 1 }]);
       const before = await stock(ids.hound);
-      const [first, second] = await Promise.all([pay(client, order.id, key), pay(client, order.id, key)]);
+      const challenge = await requestPaymentOtp(client, 'netbanking');
+      const [[user]] = await db.query('SELECT email FROM users WHERE id = ?', [userId]);
+      const otp = mailedPaymentCodes.get(user.email);
+      const [first, second] = await Promise.all([
+        verifyPaymentOtp(client, challenge.json.challenge.challengeId, otp),
+        verifyPaymentOtp(client, challenge.json.challenge.challengeId, otp),
+      ]);
+      assert.equal(mailedOrderConfirmationCounts.get(user.email), 1, 'repeated verification dispatches one confirmation email');
       assert.deepEqual([first.status, second.status].sort(), [200, 201], 'one creates, the duplicate reuses');
-      assert.equal(first.json.attempt.id, second.json.attempt.id);
-      const later = await pay(client, order.id, randomUUID());
-      assert.ok(later.status >= 400, 'an already-paid order cannot be paid again');
-      assert.equal(await count("SELECT COUNT(*) AS n FROM payments WHERE order_id = ? AND status = 'succeeded'", [order.id]), 1, 'exactly one successful payment');
+      assert.equal(first.json.order.id, second.json.order.id);
+      assert.equal(first.json.order.paymentMethod, 'netbanking');
+      assert.equal(await count('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [userId]), 1, 'duplicate submission cannot create a second order');
+      assert.equal(await count("SELECT COUNT(*) AS n FROM payments WHERE order_id = ? AND status = 'succeeded'", [first.json.order.id]), 1, 'exactly one successful payment record');
       assert.equal(await stock(ids.hound), before - 1, 'stock was deducted once');
       const columns = await count("SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND (column_name LIKE '%card%' OR column_name LIKE '%cvv%' OR column_name LIKE '%expiry%')");
       assert.equal(columns, 0, 'the schema has nowhere to keep card data');
     });
 
-    it('TC-PAY-03 an idempotency key cannot be reused by another customer, and nobody can pay or read another customer’s order', async () => {
+    it('TC-PAY-03 customers cannot verify another customer’s OTP challenge or read their order', async () => {
       const a = await customerWith(ids.base, [{ bookId: ids.hound, quantity: 1 }]);
       const b = await customerWith(ids.base, [{ bookId: ids.hound, quantity: 1 }]);
-      const orderA = (await draft(a.client)).json.order;
-      const key = randomUUID();
-      assert.equal((await pay(a.client, orderA.id, key)).status, 201);
-      assert.equal((await pay(b.client, orderA.id, randomUUID())).status, 404, 'b cannot pay a’s order');
-      assert.equal((await pay(b.client, orderA.id, key)).status, 409, 'b cannot reuse a’s key');
+      const challenge = await requestPaymentOtp(a.client, 'upi');
+      const [[user]] = await db.query('SELECT email FROM users WHERE id = ?', [a.userId]);
+      const otp = mailedPaymentCodes.get(user.email);
+      const forbidden = await verifyPaymentOtp(b.client, challenge.json.challenge.challengeId, otp);
+      assert.equal(forbidden.status, 400, 'b cannot verify a’s challenge');
+      const orderA = (await verifyPaymentOtp(a.client, challenge.json.challenge.challengeId, otp)).json.order;
       assert.equal((await b.client.get(`/api/orders/${orderA.id}`)).status, 404);
       assert.equal((await b.client.get(`/api/orders/${orderA.id}/tracking`)).status, 404);
-      assert.equal((await b.client.get(`/api/payments/${(await a.client.get(`/api/orders/${orderA.id}`)).json.order.paymentAttempts?.[0]?.id ?? 1}`)).status, 404);
+    });
+
+    it('TC-PAY-04 resend cooldown and attempt limits protect the payment code', async () => {
+      const { userId, client } = await customerWith(ids.base, [{ bookId: ids.emma, quantity: 1 }]);
+      const started = await requestPaymentOtp(client, 'card');
+      assert.equal(started.status, 201);
+      assert.equal((await requestPaymentOtp(client, 'card')).status, 429, 'immediate resend is throttled');
+      await db.query('UPDATE payment_otp_challenges SET created_at = UTC_TIMESTAMP() - INTERVAL 2 MINUTE WHERE id = ?', [started.json.challenge.challengeId]);
+      assert.equal((await requestPaymentOtp(client, 'card')).status, 201, 'resend is allowed after the cooldown');
+      const [[user]] = await db.query('SELECT email FROM users WHERE id = ?', [userId]);
+      const newest = (await db.query('SELECT id FROM payment_otp_challenges WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [userId]))[0][0].id;
+      for (let attempt = 0; attempt < 4; attempt += 1) assert.equal((await verifyPaymentOtp(client, newest, '000000')).status, 400);
+      const locked = await verifyPaymentOtp(client, newest, '000000');
+      assert.equal(locked.status, 429);
+      assert.equal(locked.json.error.code, 'PAYMENT_OTP_ATTEMPTS_EXCEEDED');
+      assert.equal(await count('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [userId]), 0, 'wrong codes never create an order');
     });
 
     it('TC-ORD-02 order history lists only the customer’s own orders, newest first; TC-ORD-03 tracking shows the status timeline', async () => {
@@ -484,7 +552,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       const history = (await client.get('/api/orders')).json.orders;
       assert.deepEqual(history.map(order => order.id), [second.id, first.id]);
       const tracking = (await client.get(`/api/orders/${first.id}/tracking`)).json.tracking;
-      assert.equal(tracking.order.status, 'pending');
+      assert.equal(tracking.order.status, 'pending_collection');
       assert.ok(tracking.order.statusHistory.length >= 1);
       assert.equal((await client.get('/api/orders/999999')).status, 404);
       assert.equal((await client.get('/api/orders/abc')).status, 400);
@@ -500,31 +568,35 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       await db.query('UPDATE books SET price = 249 WHERE id = ?', [ids.emma]);
     });
 
-    it('TC-INV-02 / BR-1 stock that disappears between checkout and payment blocks the purchase, with nothing charged or deducted', async () => {
+    it('TC-INV-02 / BR-1 stock that disappears after OTP delivery blocks order creation, with no payment record', async () => {
       const book = await f.addBook({ title: 'Last Copies', price: 100, quantity: 3 });
-      const { client } = await customerWith(ids.base, [{ bookId: book, quantity: 3 }]);
-      const order = (await draft(client)).json.order;
+      const { client, userId } = await customerWith(ids.base, [{ bookId: book, quantity: 3 }]);
+      const challenge = await requestPaymentOtp(client, 'card');
+      const [[user]] = await db.query('SELECT email FROM users WHERE id = ?', [userId]);
+      const otp = mailedPaymentCodes.get(user.email);
       await db.query('UPDATE inventory SET quantity = 1 WHERE book_id = ?', [book]);
-      const paid = await pay(client, order.id);
+      const paid = await verifyPaymentOtp(client, challenge.json.challenge.challengeId, otp);
       assert.equal(paid.status, 409, paid.text);
       assert.equal(paid.json.error.code, 'INSUFFICIENT_STOCK');
       assert.equal(await stock(book), 1, 'stock is unchanged');
-      assert.equal((await client.get(`/api/orders/${order.id}`)).json.order.status === 'paid', false, 'the order is not confirmed');
-      assert.equal(await count("SELECT COUNT(*) AS n FROM payments WHERE order_id = ? AND status = 'succeeded'", [order.id]), 0);
+      assert.equal(await count('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [userId]), 0, 'the failed verification creates no order');
+      assert.equal(await count('SELECT COUNT(*) AS n FROM payments WHERE user_id = ?', [userId]), 0);
     });
 
     it('TC-INV-03 concurrent buyers of the last copy: exactly one wins, stock never goes negative', async () => {
       const book = await f.addBook({ title: 'The Very Last Copy', price: 150, quantity: 1 });
       const buyers = await Promise.all([1, 2, 3, 4].map(() => customerWith(ids.base, [{ bookId: book, quantity: 1 }])));
-      const drafts = await Promise.all(buyers.map(buyer => draft(buyer.client)));
-      const orders = drafts.map(d => d.json.order);
-      assert.deepEqual(drafts.map(d => d.status), [201, 201, 201, 201], 'simultaneous checkouts of the same book all get an order (no deadlock error)');
-      const results = await Promise.all(buyers.map((buyer, index) => pay(buyer.client, orders[index].id)));
-      assert.equal(results.filter(result => result.status === 201 && result.json.attempt.status === 'succeeded').length, 1, 'exactly one purchase succeeds');
+      const challenges = await Promise.all(buyers.map(buyer => requestPaymentOtp(buyer.client, 'upi')));
+      assert.ok(challenges.every(result => result.status === 201), 'every customer receives a code before any order exists');
+      const results = await Promise.all(buyers.map(async (buyer, index) => {
+        const [[user]] = await db.query('SELECT email FROM users WHERE id = ?', [buyer.userId]);
+        return verifyPaymentOtp(buyer.client, challenges[index].json.challenge.challengeId, mailedPaymentCodes.get(user.email));
+      }));
+      assert.equal(results.filter(result => result.status === 201 && result.json.order?.paymentStatus === 'succeeded').length, 1, 'exactly one purchase succeeds');
       assert.equal(await stock(book), 0);
-      assert.equal(await count("SELECT COUNT(*) AS n FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE oi.book_id = ? AND o.status = 'paid'", [book]), 1);
+      assert.equal(await count("SELECT COUNT(*) AS n FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE oi.book_id = ? AND o.status = 'confirmed'", [book]), 1);
       assert.equal(await count("SELECT COUNT(*) AS n FROM payments p JOIN order_items oi ON oi.order_id = p.order_id WHERE oi.book_id = ? AND p.status = 'succeeded'", [book]), 1);
-      assert.ok(results.filter(result => result.status !== 201).every(result => result.status === 409), 'the others are told the book ran out');
+      assert.ok(results.filter(result => result.status !== 201).every(result => result.status === 409), 'the others are told the book ran out and have no order');
     });
   });
 
@@ -536,6 +608,11 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       assert.equal(login.status, 200);
       assert.equal(login.json.user.role, 'admin');
       const customer = api(ids.base, await sessionFor(ids.asha));
+      // Earlier order-flow cases have legitimately consumed stock from this shared
+      // fixture. The access-control invariant is that refused requests do not change
+      // the current stock, not that the original seed quantity is restored.
+      const stockBeforeRefusedRequests = await stock(ids.pride);
+      const adjustmentsBeforeRefusedRequests = await count('SELECT COUNT(*) AS n FROM inventory_adjustments WHERE book_id = ?', [ids.pride]);
       const requests = [
         ['get', '/api/admin/books'], ['post', '/api/admin/books', { title: 'x' }], ['patch', `/api/admin/books/${ids.pride}`, { price: 1 }], ['del', `/api/admin/books/${ids.pride}`],
         ['get', '/api/inventory/stock'], ['get', `/api/inventory/stock/${ids.pride}`], ['put', `/api/inventory/stock/${ids.pride}`, { quantity: 1 }], ['patch', `/api/inventory/stock/${ids.pride}`, { change: 1 }],
@@ -544,7 +621,30 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
         const response = await customer[method](path, body);
         assert.equal(response.status, 403, `customer ${method.toUpperCase()} ${path} -> ${response.status}`);
       }
-      assert.equal(await stock(ids.pride), 20, 'the refused customer requests changed nothing');
+      assert.equal(await stock(ids.pride), stockBeforeRefusedRequests, 'the refused customer requests changed nothing');
+      assert.equal(await count('SELECT COUNT(*) AS n FROM inventory_adjustments WHERE book_id = ?', [ids.pride]), adjustmentsBeforeRefusedRequests, 'the refused customer requests wrote no stock audit entries');
+    });
+
+    it('TC-ADM-04 administrator fulfilment and COD collection persist for customer tracking, including returns', async () => {
+      const buyer = await customerWith(ids.base, [{ bookId: ids.pride, quantity: 1 }]);
+      const created = await draft(buyer.client, { paymentMethod: 'cod' });
+      assert.equal(created.status, 201);
+      const order = created.json.order;
+      const admin = api(ids.base, await sessionFor(ids.admin));
+      const listed = await admin.get('/api/admin/orders');
+      assert.ok(listed.json.orders.some(item => item.id === order.id));
+      assert.equal((await buyer.client.post(`/api/admin/orders/${order.id}/status`, { status: 'confirmed' })).status, 403);
+      const sequence = ['confirmed', 'processing', 'packed', 'shipped', 'out_for_delivery', 'delivered'];
+      for (const status of sequence) assert.equal((await admin.patch(`/api/admin/orders/${order.id}/status`, { status })).status, 200, status);
+      assert.equal((await buyer.client.get(`/api/orders/${order.id}/tracking`)).json.tracking.order.status, 'delivered');
+      assert.equal((await buyer.client.get(`/api/orders/${order.id}/tracking`)).json.tracking.order.paymentStatus, 'pending_collection');
+      assert.equal((await admin.patch(`/api/admin/orders/${order.id}/payment`, { status: 'collected' })).status, 200);
+      assert.equal((await buyer.client.get(`/api/orders/${order.id}`)).json.order.paymentStatus, 'collected');
+      assert.equal((await buyer.client.post(`/api/orders/${order.id}/return`, {})).status, 200);
+      assert.equal((await admin.patch(`/api/admin/orders/${order.id}/status`, { status: 'returned' })).status, 200);
+      const tracked = (await buyer.client.get(`/api/orders/${order.id}/tracking`)).json.tracking;
+      assert.equal(tracked.order.status, 'returned');
+      assert.deepEqual(tracked.statusHistory.slice(-2).map(item => item.toStatus), ['return_requested', 'returned']);
     });
 
     it('TC-ADM-02 book create / update / price change / remove, with validation; removed books leave the catalogue but keep old orders intact', async () => {
@@ -607,14 +707,13 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       assert.ok(elapsed < 3000, `100 concurrent book-detail requests took ${Math.round(elapsed)} ms`);
     });
 
-    it('PERF-2 a complete checkout (order + payment) finishes within 3 seconds', async () => {
+    it('PERF-2 Gmail OTP checkout creates the order and payment record within 3 seconds', async () => {
       const { client } = await customerWith(ids.base, [{ bookId: ids.hound, quantity: 1 }]);
       const started = performance.now();
-      const order = (await draft(client)).json.order;
-      const paid = await pay(client, order.id);
+      const paid = await pay(client, 'card');
       const elapsed = performance.now() - started;
-      assert.equal(paid.json.attempt.status, 'succeeded');
-      assert.ok(elapsed < 3000, `order + payment took ${Math.round(elapsed)} ms`);
+      assert.equal(paid.json.order.paymentStatus, 'succeeded');
+      assert.ok(elapsed < 3000, `OTP request + order confirmation took ${Math.round(elapsed)} ms`);
     });
 
     it('SEC errors never expose internals (no stack traces, no raw database error text)', async () => {
@@ -630,7 +729,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
 
   // ---------------------------------------------------------------- Known defects (todo = documented, not blocking)
   describe('known defects (see docs/TEST_EXECUTION_REPORT.md)', () => {
-    it('DEF-01 TC-ORD-03 / BR-2 a customer can cancel an order before it ships', { todo: 'SRS 5.6 / BR-2: no cancellation endpoint or button exists' }, async () => {
+    it('TC-ORD-04 / BR-2 a customer can cancel a still-pending order and its inventory reservation', async () => {
       const { client } = await customerWith(ids.base, [{ bookId: ids.pride, quantity: 1 }]);
       const order = (await draft(client)).json.order;
       const cancelled = await client.post(`/api/orders/${order.id}/cancel`, {});
@@ -638,12 +737,12 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       assert.equal((await client.get(`/api/orders/${order.id}`)).json.order.status, 'cancelled');
     });
 
-    it('DEF-02 TC-ADM-03 / SRS 5.8 an administrator can list customer orders and move them through Processing, Shipped, Delivered', { todo: 'SRS 5.8 / 5.9: there are no administrator order endpoints or screens' }, async () => {
+    it('TC-ADM-05 / SRS 5.8 an administrator can list customer orders', async () => {
       const admin = api(ids.base, await sessionFor(ids.admin));
       assert.equal((await admin.get('/api/admin/orders')).status, 200);
     });
 
-    it('DEF-03 TC-ADM-02 adding a book whose ISBN already exists is a clear 409, not a 500', { todo: 'POST /api/admin/books answers 500 ER_DUP_ENTRY' }, async () => {
+    it('TC-ADM-02 adding a book whose ISBN already exists is a clear 409, not a 500', async () => {
       const admin = api(ids.base, await sessionFor(ids.admin));
       const body = { title: 'Duplicate ISBN', author: 'A', category: 'Classics', description: 'd', price: 10, isbn: '9780141439518' };
       const response = await admin.post('/api/admin/books', body);
@@ -651,7 +750,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       assert.ok(!/ER_DUP_ENTRY/.test(response.text), 'raw database error codes are not shown to clients');
     });
 
-    it('DEF-04 TC-CART-04 changing a cart quantity above the stock explains how many copies are available', { todo: 'PATCH /api/cart/items/:id says "out of stock" while copies are in stock' }, async () => {
+    it('DEF-04 TC-CART-04 changing a cart quantity above the stock explains how many copies are available', async () => {
       const { client } = await customerWith(ids.base, [{ bookId: ids.emma, quantity: 1 }]);
       const response = await client.patch(`/api/cart/items/${ids.emma}`, { quantity: 50 });
       assert.equal(response.status, 409);
@@ -664,13 +763,19 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       assert.ok(performance.now() - started < 2000);
     });
 
-    it('DEF-05 TC-PAY-03 paying an order that is already paid says so (409 ORDER_NOT_PAYABLE), not "order not found"', { todo: 'POST /api/payments/orders/:id answers 404 for an already-paid order' }, async () => {
+    it('TC-PAY-03 repeated verified OTP submission reuses the completed order without a second charge', async () => {
       const { client } = await customerWith(ids.base, [{ bookId: ids.hound, quantity: 1 }]);
-      const order = (await draft(client)).json.order;
-      await pay(client, order.id);
-      const again = await pay(client, order.id);
-      assert.equal(again.status, 409);
-      assert.equal(again.json.error.code, 'ORDER_NOT_PAYABLE');
+      const challenge = await requestPaymentOtp(client, 'card');
+      const [[user]] = await db.query('SELECT email FROM users WHERE id = ?', [client.userId]);
+      const otp = mailedPaymentCodes.get(user.email);
+      const first = await verifyPaymentOtp(client, challenge.json.challenge.challengeId, otp);
+      const again = await verifyPaymentOtp(client, challenge.json.challenge.challengeId, otp);
+      assert.equal(first.status, 201);
+      assert.equal(again.status, 200);
+      assert.equal(again.json.order.id, first.json.order.id);
+      assert.equal(await count('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [client.userId]), 1);
+      assert.equal(await count('SELECT COUNT(*) AS n FROM payments WHERE user_id = ? AND status = \'succeeded\'', [client.userId]), 1);
     });
   });
 });
+

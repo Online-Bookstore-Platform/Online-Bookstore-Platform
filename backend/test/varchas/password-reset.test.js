@@ -2,80 +2,75 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { once } from 'node:events';
-import { createHash } from 'node:crypto';
 import { createAuthRouter } from '../../src/features/varchas/authentication/auth.routes.js';
 import { verifyPassword } from '../../src/features/varchas/authentication/password.js';
 
-async function fixture(t, env = { NODE_ENV: 'development', DEV_PASSWORD_RESET_LINK: 'true' }) {
-  const tokens = new Map();
-  const sessions = { destroyed: 0 };
+async function fixture(t, mailConfigured = true) {
+  const env = { NODE_ENV: 'test', SESSION_SECRET: 'unit-test-reset-pepper' };
+  const state = { reset: null, sessions: 0, passwordHash: null, sent: [] };
   const users = {
     async findResetUserByEmail(email) { return email === 'reader@example.com' ? { id: 8 } : null; },
-    async savePasswordReset(userId, tokenHash, validUntil) { tokens.set(tokenHash, { userId, validUntil, used: false }); },
+    async savePasswordReset(userId, tokenHash, validUntil) { state.reset = { userId, tokenHash, validUntil, attempts: 0, used: false }; return true; },
+    async verifyPasswordResetOtp(email, tokenHash, proofHash, validUntil) {
+      const row = state.reset;
+      if (!row || email !== 'reader@example.com' || row.used || row.validUntil <= new Date() || row.attempts >= 5) return false;
+      if (row.tokenHash !== tokenHash) { row.attempts += 1; return false; }
+      row.tokenHash = proofHash; row.validUntil = validUntil; return true;
+    },
     async consumePasswordReset(tokenHash, passwordHash) {
-      const row = tokens.get(tokenHash);
-      if (!row || row.used || row.validUntil <= new Date()) return false;
-      row.used = true;
-      row.passwordHash = passwordHash;
-      return true;
+      const row = state.reset;
+      if (!row || row.used || row.validUntil <= new Date() || row.tokenHash !== tokenHash) return false;
+      row.used = true; state.passwordHash = passwordHash; return true;
     },
   };
-  const app = express();
-  app.use(express.json());
-  app.use((request, _response, next) => { request.session = { destroy(callback) { sessions.destroyed += 1; callback(); } }; next(); });
-  app.use('/api/auth', createAuthRouter({ authService: {}, requireAuth: (_req, _res, next) => next(), users, env }));
-  const server = app.listen(0);
-  await once(server, 'listening');
+  const emailService = mailConfigured ? { configured: true, async sendPasswordResetOtp(message) { state.sent.push(message); } } : null;
+  const app = express(); app.use(express.json());
+  app.use((request, _response, next) => { request.session = { destroy(callback) { state.sessions += 1; callback(); } }; next(); });
+  app.use('/api/auth', createAuthRouter({ authService: {}, requireAuth: (_req, _res, next) => next(), users, emailService, env }));
+  app.use((error, _request, response, _next) => response.status(error.status || 500).json({ error: { code: error.code, message: error.message } }));
+  const server = app.listen(0); await once(server, 'listening');
   t.after(() => new Promise(resolve => server.close(resolve)));
-  return { base: `http://127.0.0.1:${server.address().port}/api/auth`, tokens, sessions };
+  return { base: `http://127.0.0.1:${server.address().port}/api/auth`, state, env };
 }
 
-test('password reset uses a generic response and returns a local-only development link', async t => {
-  const { base, tokens, sessions } = await fixture(t);
-  const existing = await fetch(`${base}/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'reader@example.com' }) });
-  const result = await existing.json();
-  assert.equal(existing.status, 200);
-  assert.match(result.message, /If an account matches/);
-  assert.match(result.developmentToken, /^[A-Za-z0-9_-]{40,60}$/);
-  const [storedHash, row] = [...tokens.entries()][0];
-  assert.equal(storedHash.length, 64);
-  assert.notEqual(storedHash, result.developmentToken);
-  assert.equal(row.userId, 8);
-  assert.ok(row.validUntil > new Date());
+const post = (base, path, body) => fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-  const missing = await fetch(`${base}/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'absent@example.com' }) });
-  assert.equal((await missing.json()).message, result.message);
+test('reset sends a six-digit OTP, stores only a hash, and keeps account responses generic', async t => {
+  const { base, state } = await fixture(t);
+  const known = await post(base, '/forgot-password', { email: 'reader@example.com' });
+  assert.match((await known.json()).message, /If an account matches/);
+  assert.match(state.sent[0].otp, /^\d{6}$/);
+  assert.equal(state.reset.tokenHash.length, 64);
+  assert.notEqual(state.reset.tokenHash, state.sent[0].otp);
+  assert.ok(state.reset.validUntil - new Date() <= 5 * 60 * 1000);
+  const missing = await post(base, '/forgot-password', { email: 'absent@example.com' });
+  assert.deepEqual(await missing.json(), { message: 'If an account matches, a reset code may be delivered to its registered email address.' });
 });
 
-test('reset rejects expired or reused tokens and stores only a bcrypt password hash', async t => {
-  const { base, tokens, sessions } = await fixture(t);
-  const requested = await fetch(`${base}/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'reader@example.com' }) });
-  const { developmentToken } = await requested.json();
-  const success = await fetch(`${base}/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: developmentToken, password: 'fresh-password-123' }) });
+test('OTP is verified once and password reset hashes the password and invalidates sessions', async t => {
+  const { base, state, env } = await fixture(t);
+  await post(base, '/forgot-password', { email: 'reader@example.com' });
+  const otp = state.sent[0].otp;
+  const invalid = await post(base, '/verify-reset-otp', { email: 'reader@example.com', otp: '000000' });
+  assert.equal(invalid.status, 400);
+  const verified = await post(base, '/verify-reset-otp', { email: 'reader@example.com', otp });
+  const { resetToken } = await verified.json();
+  assert.equal(verified.status, 200);
+  const success = await post(base, '/reset-password', { resetToken, password: 'fresh-password-123' });
   assert.equal(success.status, 204);
-  assert.equal(sessions.destroyed, 1);
-  const [, row] = [...tokens.entries()][0];
-  assert.match(row.passwordHash, /^\$2/);
-  assert.equal(await verifyPassword('fresh-password-123', row.passwordHash), true);
-  const reused = await fetch(`${base}/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: developmentToken, password: 'another-password-123' }) });
-  assert.equal(reused.status, 400);
-
-  const expiredToken = 'x'.repeat(43);
-  tokens.set(createHash('sha256').update(expiredToken).digest('hex'), { userId: 8, validUntil: new Date(0), used: false });
-  const expired = await fetch(`${base}/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: expiredToken, password: 'another-password-123' }) });
-  assert.equal(expired.status, 400);
+  assert.equal(state.sessions, 1);
+  assert.match(state.passwordHash, /^\$2/);
+  assert.equal(await verifyPassword('fresh-password-123', state.passwordHash), true);
+  assert.equal((await post(base, '/verify-reset-otp', { email: 'reader@example.com', otp })).status, 400);
+  assert.equal((await post(base, '/reset-password', { resetToken, password: 'another-password-123' })).status, 400);
 });
 
-test('production reset requests never return the token', async t => {
-  const { base } = await fixture(t, { NODE_ENV: 'production' });
-  const response = await fetch(`${base}/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'reader@example.com' }) });
-  assert.equal(response.status, 200);
-  assert.deepEqual(Object.keys(await response.json()), ['message']);
-});
-
-test('the localhost development reset link is disabled unless explicitly enabled', async t => {
-  const { base } = await fixture(t, { NODE_ENV: 'development', DEV_PASSWORD_RESET_LINK: 'false' });
-  const response = await fetch(`${base}/forgot-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'reader@example.com' }) });
-  assert.equal(response.status, 200);
-  assert.deepEqual(Object.keys(await response.json()), ['message']);
+test('forgot-password never exposes codes and returns the same response for unknown addresses', async t => {
+  const { base, state } = await fixture(t, false);
+  const known = await post(base, '/forgot-password', { email: 'reader@example.com' });
+  const unknown = await post(base, '/forgot-password', { email: 'absent@example.com' });
+  assert.equal(known.status, 503); assert.equal(unknown.status, 503);
+  assert.equal((await known.json()).error.code, 'EMAIL_PROVIDER_NOT_CONFIGURED');
+  assert.equal((await unknown.json()).error.code, 'EMAIL_PROVIDER_NOT_CONFIGURED');
+  assert.equal(state.sent.length, 0);
 });

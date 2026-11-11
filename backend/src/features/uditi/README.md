@@ -82,7 +82,11 @@ Prices and availability are **re-read from the database on every call**; nothing
 
 Checkout needs only `cartReader.getItems(userId) → Promise<[{ bookId, quantity }]>` (empty array for an empty cart). Pass Vrinda's cart service as `cartReader` when it exists. Until then `createDatabaseCartReader(pool)` reads the shared `carts`/`cart_items` tables read-only, which is also exactly what Vrinda's cart API should be writing. If the reader is missing the summary returns 503 and if it returns unusable data, `502 CART_INVALID` – never an invented cart. The cart REST API itself (Vrinda) is called by the **browser**: the catalogue's *Add to cart* button posts `{ bookId, quantity: 1 }` to `POST /api/cart/items`, the same proposed contract Varchas's book-details page uses.
 
-## Order-draft / payment hand-off (needed from Vrinda and Varchas)
+## Current order and payment hand-off
+
+Checkout rechecks the cart and delivery before it continues. COD creates an order at checkout. Card, UPI, and net banking go to `/payment?method=<method>` without creating an order. Gmail OTP verification rechecks current cart prices and stock, then atomically creates the confirmed order, simulated payment record, and inventory change.
+
+The following proposal is historical and superseded by the current flow above.
 
 Checkout stops at "ready to pay": the *Continue to payment* button re-checks the summary and then calls the order-draft endpoint. **No order-draft endpoint is documented in the repository yet**, so the frontend uses this proposal and shows a clear "order service not connected" message if it answers 404/503:
 
@@ -91,7 +95,7 @@ Checkout stops at "ready to pay": the *Continue to payment* button re-checks the
 
 If the teams choose a different contract, only `frontend/src/features/uditi/checkout/api.js` changes.
 
-## Missing integration pieces (nothing is faked)
+## Historical integration notes (superseded)
 
 * Repository adapters for Varchas's `users`, `books`, `orders`, `payments` (`createVarchasAdapters`) are **not** part of Uditi's scope; the field mapping to the shared tables is in the database README.
 * `createUditiRouter` still has to be mounted in `src/app.js`, and `/catalogue`, `/checkout`, `/inventory` routes in the frontend router already point at Uditi's pages.

@@ -111,8 +111,10 @@ export default function CheckoutPage() {
         return;
       }
 
-      const order = await createOrderDraft(clean, paymentMethod);
-      navigate(paymentMethod === 'cod' ? `/orders/${encodeURIComponent(order.id)}` : paymentPath(order));
+      if (paymentMethod === 'cod') {
+        const order = await createOrderDraft(clean, paymentMethod);
+        navigate(`/orders/${encodeURIComponent(order.id)}`);
+      } else navigate(paymentPath(paymentMethod));
     } catch (error) {
       await handleSubmitError(error);
     } finally {

@@ -65,6 +65,10 @@ export async function createOrderItem(db, orderId, item) {
   );
 }
 
+export async function ensureOrderConfirmationDelivery(db, orderId) {
+  await db.query('INSERT IGNORE INTO order_confirmation_email_deliveries (order_id) VALUES (?)', [orderId]);
+}
+
 export async function createInitialStatus(db, orderId, userId) {
   await db.query(
     `INSERT INTO order_status_history (order_id, from_status, to_status, changed_by, note)
@@ -80,8 +84,7 @@ export async function clearCart(db, cartId) {
 export async function listOrders(db, userId) {
   const [rows] = await db.query(
     `SELECT id, order_number AS orderNumber, status, payment_method AS paymentMethod, payment_status AS paymentStatus, total_amount AS totalAmount,
-            currency, created_at AS createdAt,
-            COALESCE((SELECT p.status FROM payments p WHERE p.order_id = orders.id ORDER BY p.id DESC LIMIT 1), payment_status) AS paymentStatus
+            currency, created_at AS createdAt
        FROM orders WHERE user_id = ? ORDER BY created_at DESC, id DESC`,
     [userId]
   );
@@ -90,11 +93,12 @@ export async function listOrders(db, userId) {
 
 export async function findOrder(db, userId, orderId) {
   const [rows] = await db.query(
-    `SELECT id, order_number AS orderNumber, status, payment_method AS paymentMethod, payment_status AS paymentStatus, total_amount AS totalAmount,
-            currency, recipient_name AS recipientName, phone,
-            address_line1 AS addressLine1, address_line2 AS addressLine2,
-            city, state, postal_code AS postalCode, country, created_at AS createdAt
-       FROM orders WHERE user_id = ? AND id = ? LIMIT 1`,
+    `SELECT orders.id, orders.order_number AS orderNumber, orders.status, orders.payment_method AS paymentMethod, orders.payment_status AS paymentStatus, orders.total_amount AS totalAmount,
+            orders.currency, orders.recipient_name AS recipientName, orders.phone,
+            orders.address_line1 AS addressLine1, orders.address_line2 AS addressLine2,
+            orders.city, orders.state, orders.postal_code AS postalCode, orders.country, orders.created_at AS createdAt,
+            users.name AS customerName, users.email
+       FROM orders JOIN users ON users.id = orders.user_id WHERE orders.user_id = ? AND orders.id = ? LIMIT 1`,
     [userId, orderId]
   );
   return rows[0] ?? null;
@@ -131,7 +135,7 @@ export async function listPaymentAttempts(db, orderId) {
 
 export async function findOrderForUpdate(db, userId, orderId) {
   const [rows] = await db.query(
-    'SELECT id, status FROM orders WHERE user_id = ? AND id = ? FOR UPDATE',
+    'SELECT id, status, stock_reserved AS stockReserved FROM orders WHERE user_id = ? AND id = ? FOR UPDATE',
     [userId, orderId]
   );
   return rows[0] ?? null;
@@ -139,9 +143,9 @@ export async function findOrderForUpdate(db, userId, orderId) {
 
 export async function getPayableOrder(db, orderId, customerId) {
   const [rows] = await db.query(
-    `SELECT id, user_id AS customerId, total_amount AS amount, currency, status
+    `SELECT id, user_id AS customerId, total_amount AS amount, currency, status, stock_reserved AS stockReserved
        FROM orders
-      WHERE id = ? AND user_id = ? AND status IN ('pending', 'payment_failed')
+      WHERE id = ? AND user_id = ?
       LIMIT 1`,
     [orderId, customerId]
   );
@@ -158,10 +162,18 @@ export async function listOrderStockItems(db, orderId) {
 
 export async function changeOrderStatus(db, orderId, currentStatus, nextStatus) {
   const [result] = await db.query(
-    'UPDATE orders SET status = ?, payment_status = ? WHERE id = ? AND status = ?',
-    [nextStatus, nextStatus === 'paid' ? 'succeeded' : 'failed', orderId, currentStatus]
+    'UPDATE orders SET status = ? WHERE id = ? AND status = ?',
+    [nextStatus, orderId, currentStatus]
   );
   return result.affectedRows === 1;
+}
+
+export async function setPaymentStatus(db, orderId, paymentStatus) {
+  await db.query('UPDATE orders SET payment_status = ? WHERE id = ?', [paymentStatus, orderId]);
+}
+
+export async function setStockReserved(db, orderId, reserved) {
+  await db.query('UPDATE orders SET stock_reserved = ? WHERE id = ?', [reserved ? 1 : 0, orderId]);
 }
 
 export async function addStatusHistory(db, { orderId, fromStatus, toStatus, note }) {

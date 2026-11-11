@@ -6,3 +6,51 @@ coverage/
 !.env.example
 .DS_Store
 Thumbs.db
+
+# Environment files; keep safe templates
+.env*
+!.env.example
+!.env.sample
+
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.temp
+
+# IDE and operating system files
+.vscode/
+.idea/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Credentials, private keys, and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+*credentials*.json
+*service-account*.json
+*service_account*.json
+
+# Database dumps and local database files
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite3
+*.db

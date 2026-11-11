@@ -5,10 +5,8 @@ import { once } from 'node:events';
 import { createApp } from '../src/app.js';
 import { hashPassword } from '../src/features/varchas/authentication/password.js';
 import { createAuthService } from '../src/features/varchas/authentication/auth.service.js';
-import { HttpError } from '../src/features/varchas/errors.js';
 import { validateBookInput, validateBookId } from '../src/features/varchas/book-details/book.validation.js';
 import { createPaymentService } from '../src/features/varchas/payments/payment.service.js';
-import { createPaymentProvider } from '../src/features/varchas/payments/payment.provider.js';
 import { createSessionMiddleware } from '../src/features/varchas/index.js';
 import { createMySqlSessionStore } from '../src/features/varchas/mysql-session-store.js';
 
@@ -31,69 +29,71 @@ test('book validation accepts safe edits and rejects bad prices, identifiers, an
   assert.throws(() => validateBookInput({ stockQuantity: 100 }, { partial: true }), error => error.status === 400);
 });
 
-function paymentFixture({ outcome = 'succeeded', amount = 750 } = {}) {
-  const attempts = new Map();
-  let providerCalls = 0;
-  let orderLookups = 0;
-  let orderStatus = 'pending';
+function paymentOtpFixture({ configured = true, sendError, logs = [] } = {}) {
+  const saved = new Map();
+  const mailed = [];
+  const challenges = {
+    async create(input) { saved.set(input.id, { ...input, attempts: 0, used: false }); return { id: input.id, resendAt: new Date(Date.now() + 60_000) }; },
+    async invalidate(id) { saved.get(id).used = true; },
+    async verify({ id, userId, otpHash }) {
+      const row = saved.get(id);
+      if (!row || row.userId !== userId) return { ok: false, reason: 'invalid' };
+      if (row.used) return { ok: false, reason: 'used' };
+      if (row.otpHash !== otpHash) { row.attempts += 1; return { ok: false, reason: row.attempts >= 5 ? 'attempts_exceeded' : 'incorrect' }; }
+      row.used = true;
+      return { ok: true, paymentMethod: row.paymentMethod };
+    },
+  };
   const orders = {
-    async getPayableOrder(id, customerId) { orderLookups += 1; return id === 'o-1' && customerId === 'u-1' ? { id, customerId, amount, currency: 'INR', status: orderStatus } : null; },
-    async recordPaymentStatus({ paymentStatus }) { orderStatus = paymentStatus === 'succeeded' ? 'paid' : 'payment_failed'; },
+    async validatePaymentCheckout() { return { totalAmount: 42, itemCount: 1 }; },
+    async createAfterPaymentOtp({ userId, challengeId, verifyChallenge }) {
+      const verification = await verifyChallenge(null);
+      return verification.ok ? { order: { id: 7, userId, paymentMethod: verification.paymentMethod, paymentStatus: 'succeeded' }, reused: false } : { verification };
+    },
   };
-  const payments = {
-    async findByIdempotencyKey(key) { return [...attempts.values()].find(item => item.idempotencyKey === key) || null; },
-    async findById(id) { return attempts.get(id) || null; },
-    async createPending(input) { const item = { id: 'p-1', status: 'pending', ...input }; attempts.set(item.id, item); return item; },
-    async updateStatus(id, status, providerReference) { const item = { ...attempts.get(id), status, providerReference }; attempts.set(id, item); return item; },
-  };
-  const provider = { mode: 'internal', async process() { providerCalls += 1; return { status: outcome, providerReference: 'folio-ref' }; } };
-  return { service: createPaymentService({ orders, payments, provider }), attempts, get providerCalls() { return providerCalls; }, get orderLookups() { return orderLookups; } };
+  const payments = { async recordSimulatedSuccess() {} };
+  const emailService = { configured, async sendPaymentOtp(message) { mailed.push(message); if (sendError) throw sendError; } };
+  const logger = { error(...args) { logs.push(args); } };
+  return { service: createPaymentService({ orders, payments, otpChallenges: challenges, emailService, secret: 'test-pepper', logger }), saved, mailed, logs };
 }
 
-test('payment processing uses the server amount and reuses an idempotent attempt', async () => {
-  const fixture = paymentFixture();
-  const first = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-1' });
-  const second = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-1' });
-  assert.equal(first.attempt.amount, 750);
-  assert.equal(first.attempt.status, 'succeeded');
-  assert.equal(second.reused, true);
-  assert.equal(fixture.providerCalls, 1);
-  assert.equal(fixture.orderLookups, 1, 'a retry returns the prior result even after the order is marked paid');
+test('simulated payment sends a private Gmail OTP and creates a confirmed order only after verification', async () => {
+  const fixture = paymentOtpFixture();
+  const challenge = await fixture.service.requestOtp({ user: { id: 4, email: 'reader@example.com' }, paymentMethod: 'upi' });
+  assert.equal(fixture.mailed[0].to, 'reader@example.com');
+  assert.equal(fixture.mailed[0].otp.length, 6);
+  assert.equal(Object.hasOwn(challenge, 'otp'), false, 'the endpoint result has no code');
+  assert.notEqual(fixture.saved.get(challenge.challengeId).otpHash, fixture.mailed[0].otp, 'database state stores only the HMAC hash');
+  const result = await fixture.service.verifyOtp({ userId: 4, challengeId: challenge.challengeId, otp: fixture.mailed[0].otp });
+  assert.equal(result.order.paymentStatus, 'succeeded');
+  assert.equal(result.order.paymentMethod, 'upi');
 });
 
-test('a declined checkout can start a fresh attempt after the order remains unpaid', async () => {
-  const fixture = paymentFixture({ outcome: 'failed' });
-  const first = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-failed' });
-  const retried = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-retry' });
-  assert.equal(first.attempt.status, 'failed');
-  assert.equal(retried.attempt.status, 'failed');
-  assert.equal(fixture.providerCalls, 2);
+test('incorrect codes consume attempts and the fifth failed attempt locks the challenge', async () => {
+  const fixture = paymentOtpFixture();
+  const challenge = await fixture.service.requestOtp({ user: { id: 4, email: 'reader@example.com' }, paymentMethod: 'card' });
+  for (let attempt = 0; attempt < 4; attempt += 1) await assert.rejects(fixture.service.verifyOtp({ userId: 4, challengeId: challenge.challengeId, otp: '000000' }), error => error.code === 'PAYMENT_OTP_INCORRECT');
+  await assert.rejects(fixture.service.verifyOtp({ userId: 4, challengeId: challenge.challengeId, otp: '000000' }), error => error.code === 'PAYMENT_OTP_ATTEMPTS_EXCEEDED');
 });
 
-test('a pending payment attempt can be cancelled by its owner', async () => {
-  const fixture = paymentFixture({ outcome: 'pending' });
-  const processed = await fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-1' });
-  assert.equal(processed.attempt.status, 'pending');
-  const cancelled = await fixture.service.cancel(processed.attempt.id, 'u-1');
-  assert.equal(cancelled.status, 'cancelled');
+test('payment OTP fails closed without Gmail and keeps method selection within supported options', async () => {
+  const fixture = paymentOtpFixture({ configured: false });
+  await assert.rejects(fixture.service.requestOtp({ user: { id: 4, email: 'reader@example.com' }, paymentMethod: 'upi' }), error => error.code === 'PAYMENT_OTP_UNAVAILABLE');
+  await assert.rejects(fixture.service.requestOtp({ user: { id: 4, email: 'reader@example.com' }, paymentMethod: 'cod' }), error => error.code === 'INVALID_PAYMENT_METHOD');
 });
 
-test('payment attempts reject missing ownership and invalid order amounts before provider use', async () => {
-  const fixture = paymentFixture({ amount: 0 });
-  await assert.rejects(fixture.service.process({ orderId: 'o-1', customerId: 'u-1', idempotencyKey: 'key-1' }), error => error instanceof HttpError && error.code === 'INVALID_ORDER_AMOUNT');
-  await assert.rejects(fixture.service.process({ orderId: 'o-1', customerId: 'u-2', idempotencyKey: 'key-2' }), error => error.status === 404);
-  assert.equal(fixture.providerCalls, 0);
-});
-
-test('internal checkout creates only local outcomes and supports retry-result scenarios', async () => {
-  assert.equal(createPaymentProvider({}).mode, 'internal');
-  assert.equal((await createPaymentProvider({ FOLIO_CHECKOUT_OUTCOME: 'approved' }).process({ paymentId: 'p-1' })).status, 'succeeded');
-  for (const [configured, expected] of Object.entries({ declined: 'failed', cancelled: 'cancelled', timeout: 'timed_out' })) {
-    const provider = createPaymentProvider({ FOLIO_CHECKOUT_OUTCOME: configured });
-    if (configured === 'timeout') await assert.rejects(provider.process({ paymentId: 'p-2' }), error => error.code === 'PAYMENT_TIMEOUT');
-    else assert.equal((await provider.process({ paymentId: 'p-2' })).status, expected);
-  }
-  assert.throws(() => createPaymentProvider({ FOLIO_CHECKOUT_OUTCOME: 'unknown' }), /must be approved/);
+test('SMTP failure logs safe diagnostics, invalidates challenge and keeps response generic', async () => {
+  const fixture = paymentOtpFixture({ sendError: Object.assign(new Error('private detail'), { code: 'EAUTH', command: 'AUTH PLAIN', responseCode: 535, response: '535 Authentication failed' }) });
+  await assert.rejects(fixture.service.requestOtp({ user: { id: 4, email: 'reader@example.com' }, paymentMethod: 'upi' }), error => {
+    assert.equal(error.code, 'PAYMENT_OTP_DELIVERY_FAILED');
+    assert.equal(error.message, 'We could not deliver the payment code. Check the email setup and try again.');
+    return true;
+  });
+  const diagnostic = JSON.stringify(fixture.logs);
+  assert.match(diagnostic, /EAUTH/);
+  assert.match(diagnostic, /535/);
+  assert.doesNotMatch(diagnostic, /private detail|283940|secret|password/i);
+  assert.equal([...fixture.saved.values()][0].used, true);
 });
 
 test('production sessions require an explicit secret and persistent store', () => {

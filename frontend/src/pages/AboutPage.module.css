@@ -29,10 +29,28 @@
 .journey li h3 { margin: 0 0 5px; font: 500 1.05rem var(--serif); }
 .principleGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
 .principleGrid article { padding-top: 20px; border-top: 1px solid var(--line); }
+.authors { padding: 16px 0 clamp(64px, 9vw, 104px); }
+.authors .sectionHeading > p:last-child { color: var(--muted); font-size: .86rem; line-height: 1.7; }
+.authorGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.authorGrid article { padding: 24px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.authorGrid article > span { display: grid; width: 56px; height: 56px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--surface-soft); color: var(--accent); font: italic 1rem var(--serif); }
+.authorGrid h3 { margin: 20px 0 9px; font: 450 1.35rem var(--serif); }
+.authorGrid p { margin: 0; color: var(--muted); font-size: .84rem; line-height: 1.75; }
+.contact { scroll-margin-top: 28px; display: grid; grid-template-columns: .8fr 1.2fr; gap: clamp(30px, 8vw, 100px); padding: clamp(30px, 5vw, 58px); border-radius: 5px; background: var(--surface-soft); }
+.contact h2 { margin: 10px 0; font: 450 clamp(2rem, 4vw, 3rem)/1.05 var(--serif); letter-spacing: -.05em; }
+.contact > div > p:last-child { max-width: 360px; color: var(--muted); font-size: .88rem; line-height: 1.75; }
+.contact form { display: grid; gap: 14px; }
+.contact label { display: grid; gap: 6px; color: var(--ink); font-size: .78rem; }
+.contact input,.contact textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); font: inherit; }
+.contact textarea { min-height: 130px; resize: vertical; }
+.contact input:focus-visible,.contact textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.contact button { justify-self: start; min-height: 44px; padding: 0 18px; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: var(--paper); font: inherit; font-size: .82rem; cursor: pointer; }
+.contact button:disabled { opacity: .65; cursor: wait; }
+.contact form p { margin: 0; font-size: .82rem; line-height: 1.6; }
 .principleGrid article > span { color: var(--accent); font-size: 1.2rem; }
 .principleGrid h3 { margin: 12px 0 8px; font-size: 1.2rem; }
 .closing { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 36px; border-left: 2px solid var(--accent); background: var(--surface-soft); }
 .closing h2 { max-width: 17ch; margin: 10px 0 0; font: 450 clamp(1.8rem, 3.5vw, 2.8rem)/1.08 var(--serif); letter-spacing: -.04em; }
 .closing .introActions { margin: 0; }
-@media (max-width: 820px) { .intro { grid-template-columns: 1fr .85fr; gap: 28px; }.journey { grid-template-columns: 1fr; gap: 30px; }.principleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.closing { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 820px) { .intro { grid-template-columns: 1fr .85fr; gap: 28px; }.journey { grid-template-columns: 1fr; gap: 30px; }.principleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.authorGrid { grid-template-columns: 1fr; }.closing { align-items: flex-start; flex-direction: column; }.contact { grid-template-columns: 1fr; gap: 20px; } }
 @media (max-width: 620px) { .intro { grid-template-columns: 1fr; }.heroArtwork { max-width: 540px; }.purpose { grid-template-columns: 1fr; gap: 14px; padding-block: 30px 44px; }.purpose > p:last-child { grid-column: 1; margin-top: 0; }.featureGrid { grid-template-columns: 1fr; }.feature { min-height: 0; }.feature h3 { margin-top: 17px; }.journey { padding: 28px 22px; }.closing { padding: 26px 22px; }.closing .introActions { align-items: flex-start; flex-direction: column; gap: 18px; } }
