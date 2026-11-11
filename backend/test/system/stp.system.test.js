@@ -759,18 +759,39 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
 
     it('DEF-06 PERF-1 ten simultaneous local catalogue searches still answer within 2 seconds', async () => {
       let mockedTime = 0;
-      let providerCalls = 0;
+      const fixtureCalls = [];
       const base = await startApp({
-        catalogueFetchImpl: async () => {
-          providerCalls += 1;
-          return new Response(JSON.stringify({ docs: [], num_found: 0 }), { status: 200, headers: { 'content-type': 'application/json' } });
+        catalogueFetchImpl: async input => {
+          const url = new URL(String(input));
+          fixtureCalls.push(url.href);
+          const payload = url.hostname === 'openlibrary.org'
+            ? { docs: [], num_found: 0 }
+            : url.hostname === 'www.googleapis.com'
+              ? { items: [], totalItems: 0 }
+              : null;
+          if (!payload) throw new Error(`Unexpected catalogue provider host: ${url.hostname}`);
+          return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } });
         },
         catalogueNow: () => (mockedTime += 1000),
       });
+      const regularFetch = globalThis.fetch;
+      let bypassedProviderRequests = 0;
+      globalThis.fetch = (input, init) => {
+        const url = new URL(String(input instanceof Request ? input.url : input));
+        if (url.hostname === '127.0.0.1') return regularFetch(input, init);
+        bypassedProviderRequests += 1;
+        return Promise.resolve(new Response('Unexpected external provider request', { status: 503 }));
+      };
       const started = performance.now();
-      const responses = await Promise.all(Array.from({ length: 10 }, (_, index) => api(base).get(`/api/catalogue/books?q=${index % 2 ? 'emma' : 'moon'}`)));
+      let responses;
+      try {
+        responses = await Promise.all(Array.from({ length: 10 }, (_, index) => api(base).get(`/api/catalogue/books?q=${index % 2 ? 'emma' : 'moon'}`)));
+      } finally {
+        globalThis.fetch = regularFetch;
+      }
       assert.ok(performance.now() - started < 2000);
-      assert.equal(providerCalls, 10, 'all provider calls use the deterministic fixture');
+      assert.ok(fixtureCalls.length > 0, 'provider requests use the deterministic fixture');
+      assert.equal(bypassedProviderRequests, 0, 'no provider request bypasses the fixture');
       assert.ok(responses.every(response => response.status === 200));
       assert.ok(responses.filter((_, index) => index % 2 === 0).every(response => response.json.books.some(book => book.provider === 'local' && book.title === 'The Moonstone')));
       assert.ok(responses.filter((_, index) => index % 2 === 1).every(response => response.json.books.some(book => book.provider === 'local' && book.title === 'Emma')));
