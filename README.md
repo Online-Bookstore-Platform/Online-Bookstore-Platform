@@ -11,6 +11,7 @@ A full-stack online bookstore built with React, Node.js, Express.js, and MySQL, 
 [![Express.js](https://img.shields.io/badge/Express.js-API-000000?logo=express&logoColor=white)](https://expressjs.com/)
 [![MySQL](https://img.shields.io/badge/MySQL-Database-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
 [![Vite](https://img.shields.io/badge/Vite-Build_Tool-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
+[![CI](https://github.com/Online-Bookstore-Platform/Online-Bookstore-Platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Online-Bookstore-Platform/Online-Bookstore-Platform/actions/workflows/ci.yml)
 
 </div>
 
