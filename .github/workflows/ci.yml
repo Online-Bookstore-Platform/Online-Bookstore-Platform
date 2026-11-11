@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - develop
+  pull_request:
+    branches:
+      - main
+      - 'feat/**'
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    name: Backend tests and frontend build
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: bookstore_ci_password
+          MYSQL_DATABASE: bookstore_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: bookstore_ci
+      DB_USER: root
+      DB_PASSWORD: bookstore_ci_password
+      NODE_ENV: test
+      SESSION_SECRET: ci-only-session-secret-not-used-in-production
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Provide the empty env file required by the backend test script
+        run: touch .env
+        working-directory: backend
+
+      - name: Initialize CI database schema
+        run: npm run db:setup
+        working-directory: backend
+
+      - name: Run backend tests
+        run: npm test
+        working-directory: backend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend

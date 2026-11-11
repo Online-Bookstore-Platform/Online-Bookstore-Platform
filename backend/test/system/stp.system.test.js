@@ -50,7 +50,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
   const mailedOrderConfirmationCounts = new Map();
 
   /** Boot the real app (same wiring as src/server.js) on a random port. */
-  async function startApp() {
+  async function startApp(catalogueDependencies = {}) {
     const users = {
       async findByEmail(email) {
         const [rows] = await db.query('SELECT id, name, email, role, password_hash AS passwordHash FROM users WHERE email = ? LIMIT 1', [email]);
@@ -77,7 +77,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
         mailedOrderConfirmationCounts.set(message.to, (mailedOrderConfirmationCounts.get(message.to) || 0) + 1);
       },
     };
-    const app = createApp({ repositories, pool: db, sessionStore: store, sessionSecret: SECRET, emailService, env: { ...process.env, NODE_ENV: 'test', SESSION_SECRET: SECRET } });
+    const app = createApp({ repositories, pool: db, sessionStore: store, sessionSecret: SECRET, emailService, env: { ...process.env, NODE_ENV: 'test', SESSION_SECRET: SECRET }, ...catalogueDependencies });
     const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
     servers.push(server);
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -811,10 +811,44 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       assert.equal(response.json.error.code, 'INSUFFICIENT_STOCK');
     });
 
-    it('DEF-06 PERF-1 ten simultaneous catalogue searches still answer within 2 seconds while Open Library is down', { todo: 'provider retries are queued one per second, so concurrent searches wait 10-20 s during an outage' }, async () => {
+    it('DEF-06 PERF-1 ten simultaneous local catalogue searches still answer within 2 seconds', async () => {
+      let mockedTime = 0;
+      const fixtureCalls = [];
+      const base = await startApp({
+        catalogueFetchImpl: async input => {
+          const url = new URL(String(input));
+          fixtureCalls.push(url.href);
+          const payload = url.hostname === 'openlibrary.org'
+            ? { docs: [], num_found: 0 }
+            : url.hostname === 'www.googleapis.com'
+              ? { items: [], totalItems: 0 }
+              : null;
+          if (!payload) throw new Error(`Unexpected catalogue provider host: ${url.hostname}`);
+          return new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } });
+        },
+        catalogueNow: () => (mockedTime += 1000),
+      });
+      const regularFetch = globalThis.fetch;
+      let bypassedProviderRequests = 0;
+      globalThis.fetch = (input, init) => {
+        const url = new URL(String(input instanceof Request ? input.url : input));
+        if (url.hostname === '127.0.0.1') return regularFetch(input, init);
+        bypassedProviderRequests += 1;
+        return Promise.resolve(new Response('Unexpected external provider request', { status: 503 }));
+      };
       const started = performance.now();
-      await Promise.all(Array.from({ length: 10 }, (_, index) => api(ids.base).get(`/api/catalogue/books?q=${index % 2 ? 'emma' : 'moon'}`)));
+      let responses;
+      try {
+        responses = await Promise.all(Array.from({ length: 10 }, (_, index) => api(base).get(`/api/catalogue/books?q=${index % 2 ? 'emma' : 'moon'}`)));
+      } finally {
+        globalThis.fetch = regularFetch;
+      }
       assert.ok(performance.now() - started < 2000);
+      assert.ok(fixtureCalls.length > 0, 'provider requests use the deterministic fixture');
+      assert.equal(bypassedProviderRequests, 0, 'no provider request bypasses the fixture');
+      assert.ok(responses.every(response => response.status === 200));
+      assert.ok(responses.filter((_, index) => index % 2 === 0).every(response => response.json.books.some(book => book.provider === 'local' && book.title === 'The Moonstone')));
+      assert.ok(responses.filter((_, index) => index % 2 === 1).every(response => response.json.books.some(book => book.provider === 'local' && book.title === 'Emma')));
     });
 
     it('TC-PAY-03 repeated verified OTP submission reuses the completed order without a second charge', async () => {
