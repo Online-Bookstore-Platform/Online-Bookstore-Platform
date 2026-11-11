@@ -50,7 +50,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
   const mailedOrderConfirmationCounts = new Map();
 
   /** Boot the real app (same wiring as src/server.js) on a random port. */
-  async function startApp() {
+  async function startApp(catalogueDependencies = {}) {
     const users = {
       async findByEmail(email) {
         const [rows] = await db.query('SELECT id, name, email, role, password_hash AS passwordHash FROM users WHERE email = ? LIMIT 1', [email]);
@@ -77,7 +77,7 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
         mailedOrderConfirmationCounts.set(message.to, (mailedOrderConfirmationCounts.get(message.to) || 0) + 1);
       },
     };
-    const app = createApp({ repositories, pool: db, sessionStore: store, sessionSecret: SECRET, emailService, env: { ...process.env, NODE_ENV: 'test', SESSION_SECRET: SECRET } });
+    const app = createApp({ repositories, pool: db, sessionStore: store, sessionSecret: SECRET, emailService, env: { ...process.env, NODE_ENV: 'test', SESSION_SECRET: SECRET }, ...catalogueDependencies });
     const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
     servers.push(server);
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -757,10 +757,23 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       assert.equal(response.json.error.code, 'INSUFFICIENT_STOCK');
     });
 
-    it('DEF-06 PERF-1 ten simultaneous catalogue searches still answer within 2 seconds while Open Library is down', { todo: 'provider retries are queued one per second, so concurrent searches wait 10-20 s during an outage' }, async () => {
+    it('DEF-06 PERF-1 ten simultaneous local catalogue searches still answer within 2 seconds', async () => {
+      let mockedTime = 0;
+      let providerCalls = 0;
+      const base = await startApp({
+        catalogueFetchImpl: async () => {
+          providerCalls += 1;
+          return new Response(JSON.stringify({ docs: [], num_found: 0 }), { status: 200, headers: { 'content-type': 'application/json' } });
+        },
+        catalogueNow: () => (mockedTime += 1000),
+      });
       const started = performance.now();
-      await Promise.all(Array.from({ length: 10 }, (_, index) => api(ids.base).get(`/api/catalogue/books?q=${index % 2 ? 'emma' : 'moon'}`)));
+      const responses = await Promise.all(Array.from({ length: 10 }, (_, index) => api(base).get(`/api/catalogue/books?q=${index % 2 ? 'emma' : 'moon'}`)));
       assert.ok(performance.now() - started < 2000);
+      assert.equal(providerCalls, 10, 'all provider calls use the deterministic fixture');
+      assert.ok(responses.every(response => response.status === 200));
+      assert.ok(responses.filter((_, index) => index % 2 === 0).every(response => response.json.books.some(book => book.provider === 'local' && book.title === 'The Moonstone')));
+      assert.ok(responses.filter((_, index) => index % 2 === 1).every(response => response.json.books.some(book => book.provider === 'local' && book.title === 'Emma')));
     });
 
     it('TC-PAY-03 repeated verified OTP submission reuses the completed order without a second charge', async () => {

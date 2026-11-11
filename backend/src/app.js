@@ -9,7 +9,7 @@ import { createReviewsRouter } from './features/varchas/book-details/reviews.rou
 import { assertPresentationStoreEnvironment } from './features/uditi/catalogue/presentation-store.js';
 import { createContactRouter } from './features/contact/contact.routes.js';
 
-export function createApp({ repositories, pool, sessionSecret, sessionStore, emailService, env = process.env } = {}) {
+export function createApp({ repositories, pool, sessionSecret, sessionStore, emailService, env = process.env, catalogueFetchImpl, catalogueNow } = {}) {
   assertPresentationStoreEnvironment(env);
   const app = express();
   app.disable('x-powered-by');
@@ -17,7 +17,7 @@ export function createApp({ repositories, pool, sessionSecret, sessionStore, ema
   app.use(createSessionMiddleware({ secret: sessionSecret || env.SESSION_SECRET, store: sessionStore, production: env.NODE_ENV === 'production' }));
 
   app.get('/api/health', (_request, response) => response.json({ status: 'ok', service: 'online-bookstore-api' }));
-  app.use('/api/catalogue', createOpenLibraryCatalogueRouter({ pool, env }));
+  app.use('/api/catalogue', createOpenLibraryCatalogueRouter({ pool, env, fetchImpl: catalogueFetchImpl, now: catalogueNow }));
   app.use('/api/contact', createContactRouter({ pool }));
   const userRepository = repositories?.users;
   app.use('/api', createVarchasRouter({ repositories, env, pool, emailService }));
