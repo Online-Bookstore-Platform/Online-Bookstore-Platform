@@ -647,6 +647,60 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       assert.deepEqual(tracked.statusHistory.slice(-2).map(item => item.toStatus), ['return_requested', 'returned']);
     });
 
+    it('TC-ADM-06 administrator order updates reject invalid input, invalid transitions and late cancellation', async () => {
+      const admin = api(ids.base, await sessionFor(ids.admin));
+      const buyer = await customerWith(ids.base, [{ bookId: ids.hound, quantity: 2 }]);
+      const order = (await draft(buyer.client)).json.order;
+
+      assert.equal((await admin.get('/api/admin/orders/abc')).status, 400, 'invalid order id on detail');
+      assert.equal((await admin.get('/api/admin/orders/99999999')).status, 404, 'unknown order on detail');
+      const detail = (await admin.get(`/api/admin/orders/${order.id}`)).json.order;
+      assert.equal(detail.items.length, 1);
+      assert.ok(Array.isArray(detail.history));
+
+      assert.equal((await admin.patch('/api/admin/orders/abc/status', { status: 'confirmed' })).status, 400, 'invalid order id');
+      assert.equal((await admin.patch(`/api/admin/orders/${order.id}/status`, { status: 'teleported' })).status, 400, 'unknown status');
+      assert.equal((await admin.patch('/api/admin/orders/99999999/status', { status: 'confirmed' })).status, 404, 'unknown order');
+
+      const jump = await admin.patch(`/api/admin/orders/${order.id}/status`, { status: 'delivered' });
+      assert.equal(jump.status, 409, 'statuses cannot be skipped');
+      assert.equal(jump.json.error.code, 'INVALID_ORDER_TRANSITION');
+
+      assert.equal((await admin.patch(`/api/admin/orders/${order.id}/payment`, { status: 'refunded' })).status, 400, 'only collection can be recorded');
+      assert.equal((await admin.patch('/api/admin/orders/abc/payment', { status: 'collected' })).status, 400, 'invalid order id on payment');
+      assert.equal((await admin.patch('/api/admin/orders/99999999/payment', { status: 'collected' })).status, 404, 'unknown order on payment');
+      const early = await admin.patch(`/api/admin/orders/${order.id}/payment`, { status: 'collected' });
+      assert.equal(early.status, 409, 'COD cannot be collected before delivery');
+      assert.equal(early.json.error.code, 'COLLECTION_NOT_ALLOWED');
+
+      for (const status of ['confirmed', 'processing', 'packed', 'shipped']) assert.equal((await admin.patch(`/api/admin/orders/${order.id}/status`, { status })).status, 200, status);
+      const late = await admin.patch(`/api/admin/orders/${order.id}/status`, { status: 'cancelled' });
+      assert.equal(late.status, 409, 'BR-2: a shipped order cannot be cancelled');
+      assert.equal(late.json.error.code, 'ORDER_NOT_CANCELLABLE');
+      assert.equal((await buyer.client.get(`/api/orders/${order.id}`)).json.order.status, 'shipped');
+    });
+
+    it('TC-ADM-07 administrator cancellation before shipping restores stock; unpaid online orders cannot be confirmed', async () => {
+      const admin = api(ids.base, await sessionFor(ids.admin));
+      const before = await stock(ids.moonstone);
+      const buyer = await customerWith(ids.base, [{ bookId: ids.moonstone, quantity: 2 }]);
+      const order = (await draft(buyer.client)).json.order;
+      assert.equal(await stock(ids.moonstone), before - 2, 'placing the order reserves two copies');
+      assert.equal((await admin.patch(`/api/admin/orders/${order.id}/status`, { status: 'confirmed' })).status, 200);
+      const cancelled = await admin.patch(`/api/admin/orders/${order.id}/status`, { status: 'cancelled', note: 'Customer called to cancel' });
+      assert.equal(cancelled.status, 200);
+      assert.equal((await buyer.client.get(`/api/orders/${order.id}`)).json.order.status, 'cancelled');
+      assert.equal(await stock(ids.moonstone), before, 'reserved copies are returned to stock');
+      assert.equal(await count("SELECT COUNT(*) AS n FROM order_status_history WHERE order_id = ? AND to_status = 'cancelled' AND note = 'Customer called to cancel'", [order.id]), 1, 'the cancellation is recorded with its note');
+
+      const online = await customerWith(ids.base, [{ bookId: ids.pride, quantity: 1 }]);
+      const unpaid = (await draft(online.client)).json.order;
+      await db.query("UPDATE orders SET status = 'pending', payment_method = 'card', payment_status = 'pending' WHERE id = ?", [unpaid.id]);
+      const confirm = await admin.patch(`/api/admin/orders/${unpaid.id}/status`, { status: 'confirmed' });
+      assert.equal(confirm.status, 409);
+      assert.equal(confirm.json.error.code, 'PAYMENT_REQUIRED');
+    });
+
     it('TC-ADM-02 book create / update / price change / remove, with validation; removed books leave the catalogue but keep old orders intact', async () => {
       const admin = api(ids.base, await sessionFor(ids.admin));
       const body = { title: 'Admin Created', author: 'A. Admin', category: 'Classics', description: 'Created by the system test', price: 123.5, isbn: '9780306406157' };
