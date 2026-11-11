@@ -39,5 +39,5 @@ export function orderServiceProblem(error) {
   return error;
 }
 
-/** Varchas's payment page takes the order id in the address. */
-export const paymentPath = order => `/payment?orderId=${encodeURIComponent(order.id)}`;
+/** Online orders are created after the Gmail payment OTP is verified. */
+export const paymentPath = paymentMethod => `/payment?method=${encodeURIComponent(paymentMethod)}`;

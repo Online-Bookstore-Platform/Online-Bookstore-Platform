@@ -18,7 +18,7 @@ export class HttpError extends Error {
 
 export const badRequest = (message, details, code = 'VALIDATION_ERROR') => new HttpError(400, code, message, details);
 export const notFound = (message, code = 'NOT_FOUND') => new HttpError(404, code, message);
-export const unavailableDependency = message => new HttpError(503, 'DEPENDENCY_NOT_CONFIGURED', message);
+export const unavailableDependency = _message => new HttpError(503, 'DEPENDENCY_NOT_CONFIGURED', 'This service is temporarily unavailable. Please try again shortly.');
 
 /** Express 4 does not catch rejected promises from async handlers; this does. */
 export const asyncHandler = handler => (request, response, next) => Promise.resolve(handler(request, response, next)).catch(next);

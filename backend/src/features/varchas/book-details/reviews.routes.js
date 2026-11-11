@@ -17,7 +17,7 @@ function validateReviewPath(bookId, reviewId) {
   if (!/^[1-9]\d{0,19}$/.test(reviewId || '')) throw new HttpError(400, 'INVALID_REVIEW_ID', 'This review link is not valid.');
 }
 
-export function createReviewsRouter({ pool, requireAuth, env = process.env, ensureDemos = ensureDemoReviews }) {
+export function createReviewsRouter({ pool, requireAuth, showPreviewReviews = false, ensurePreviews = ensureDemoReviews }) {
   const router = Router();
   router.get('/:bookId/reviews', asyncHandler(async (req, res) => {
     const identity = bookIdentity(req.params.bookId);
@@ -26,21 +26,35 @@ export function createReviewsRouter({ pool, requireAuth, env = process.env, ensu
       const [books] = await pool.query('SELECT id FROM books WHERE id = ? AND is_active = 1 LIMIT 1', [identity.localId]);
       if (!books.length) throw new HttpError(404, 'BOOK_NOT_FOUND', 'This book is unavailable.');
     }
-    if (env.NODE_ENV !== 'production') await ensureDemos(pool, identity);
-    const demoFilter = env.NODE_ENV === 'production' ? 'AND r.is_demo = 0' : '';
+    if (showPreviewReviews) await ensurePreviews(pool, identity);
+    const previewFilter = showPreviewReviews ? '' : 'AND r.is_demo = 0';
     const [rows] = await pool.query(`SELECT r.id, r.rating, r.content, r.created_at AS createdAt, r.updated_at AS updatedAt,
       u.name AS author, r.demo_label AS demoLabel, r.is_demo AS isDemo, (r.user_id = ?) AS mine
       FROM book_reviews r LEFT JOIN users u ON u.id = r.user_id
-      WHERE r.book_id = ? ${demoFilter} ORDER BY r.created_at DESC LIMIT 100`, [req.session?.userId || 0, identity.key]);
+      WHERE r.book_id = ? ${previewFilter} ORDER BY r.created_at DESC LIMIT 100`, [req.session?.userId || 0, identity.key]);
     const [[summary]] = await pool.query(`SELECT COUNT(*) AS count, AVG(rating) AS average
       FROM book_reviews r WHERE r.book_id = ? AND r.is_demo = 0`, [identity.key]);
-    const [[sampleSummary]] = env.NODE_ENV === 'production'
-      ? [[{ count: 0, average: null }]]
-      : await pool.query('SELECT COUNT(*) AS count, AVG(rating) AS average FROM book_reviews WHERE book_id = ? AND is_demo = 1', [identity.key]);
-    res.json({ reviews: rows.map(row => ({ ...row, isDemo: Boolean(row.isDemo), mine: Boolean(row.mine), author: row.isDemo ? row.demoLabel : row.author })), summary: {
-      count: Number(summary.count), average: summary.average == null ? null : Number(summary.average),
-      demoCount: Number(sampleSummary.count || 0), demoAverage: sampleSummary.average == null ? null : Number(sampleSummary.average),
-    } });
+    const [[previewSummary]] = showPreviewReviews
+      ? await pool.query('SELECT COUNT(*) AS count, AVG(rating) AS average FROM book_reviews WHERE book_id = ? AND is_demo = 1', [identity.key])
+      : [[{ count: 0, average: null }]];
+    const reviews = rows.map(({ isDemo, demoLabel, ...row }) => showPreviewReviews
+      ? ({ ...row, isDemo: Boolean(isDemo), mine: Boolean(row.mine), author: isDemo ? demoLabel : row.author })
+      : ({ ...row, mine: Boolean(row.mine) }));
+    const customerCount = Number(summary.count);
+    const demoCount = showPreviewReviews ? Number(previewSummary.count || 0) : 0;
+    const responseSummary = {
+      count: customerCount + demoCount,
+      average: customerCount + demoCount
+        ? ((Number(summary.average || 0) * customerCount + Number(previewSummary.average || 0) * demoCount) / (customerCount + demoCount))
+        : null,
+      customerCount,
+      customerAverage: summary.average == null ? null : Number(summary.average),
+    };
+    if (showPreviewReviews) {
+      responseSummary.demoCount = Number(previewSummary.count || 0);
+      responseSummary.demoAverage = previewSummary.average == null ? null : Number(previewSummary.average);
+    }
+    res.json({ reviews, summary: responseSummary });
   }));
   router.post('/:bookId/reviews', requireAuth, asyncHandler(async (req, res) => {
     const identity = bookIdentity(req.params.bookId);

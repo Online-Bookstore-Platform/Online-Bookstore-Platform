@@ -72,6 +72,7 @@ test('exact local identifier search wins over unrelated provider metadata and re
     throw new Error(`Unexpected provider request: ${url}`);
   };
   const pool = { async query(sql, params = []) {
+    if (sql.includes('FROM book_reviews WHERE is_demo = 0')) return [[]];
     if (sql.includes('b.isbn IN (?)')) return [[local]];
     if (sql.includes('UPPER(REPLACE(REPLACE(b.isbn')) return [[params[0] === '9780306406157' ? local : undefined].filter(Boolean)];
     if (sql.includes('b.title LIKE')) return [[local]];
@@ -115,6 +116,7 @@ test('local title search includes a book with no ISBN and does not require provi
     throw new Error(`Unexpected provider request: ${url}`);
   };
   const pool = { async query(sql) {
+    if (sql.includes('FROM book_reviews WHERE is_demo = 0')) return [[]];
     if (sql.includes('b.title LIKE')) return [[local]];
     throw new Error(`Unexpected local query: ${sql}`);
   } };
@@ -202,6 +204,7 @@ test('Google Books fallback normalizes discovery data and maps exact ISBNs to re
     throw new Error(`Unexpected provider request: ${url}`);
   };
   const pool = { async query(sql) {
+    if (sql.includes('FROM book_reviews WHERE is_demo = 0')) return [[]];
     if (sql.includes('b.isbn IN (?)')) return [[{ id: 41, isbn: '9780306406157', title: 'Local Store Title', author: 'Local Author', category: 'Anime & Manga', price: 245.5, description: 'Local description.', cover_image_url: 'https://images.example.test/local-cover.jpg', quantity: 2 }]];
     if (sql.includes('WHERE b.is_active = 1 AND b.isbn = ?')) return [[{ id: 41, isbn: '9780306406157', title: 'Local Store Title', author: 'Local Author', category: 'Anime & Manga', price: 245.5, description: 'Local description.', cover_image_url: 'https://images.example.test/local-cover.jpg', quantity: 2 }]];
     if (sql.includes('WHERE b.is_active = 1') && (sql.includes('UPPER(REPLACE') || sql.includes('b.title LIKE'))) return [[]];

@@ -21,7 +21,7 @@ export default function BookResult({ book, index }) {
   }
   return <li className={styles.item}>
     <Link className={styles.cardLink} to={`/books/${encodeURIComponent(book.id)}`} aria-label={`${book.title} by ${book.author}. View details`}>
-      <BookCard title={book.title} author={book.author} category={year} cover={book.coverImageUrl} palette={paletteFor(book.categoryId)} index={index} />
+      <BookCard title={book.title} author={book.author} category={year} cover={book.coverImageUrl} palette={paletteFor(book.categoryId)} index={index} rating={book.rating} />
     </Link>
     <div className={styles.buy}>
       {purchasable

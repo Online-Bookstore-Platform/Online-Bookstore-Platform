@@ -27,6 +27,12 @@
 
 SET NAMES utf8mb4;
 
+CREATE TABLE schema_migrations (
+  migration_name VARCHAR(255) NOT NULL,
+  applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (migration_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- -----------------------------------------------------------------------------
 -- users: customer and administrator accounts (role-based access, SEC-3)
 --   Column names match the "users" adapter contract in
@@ -66,11 +72,26 @@ CREATE TABLE password_reset_tokens (
   token_hash CHAR(64) NOT NULL,
   valid_until DATETIME NOT NULL,
   used_at DATETIME NULL,
+  otp_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_password_reset_token_hash (token_hash),
   KEY idx_password_reset_user_validity (user_id, valid_until),
   CONSTRAINT fk_password_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE payment_otp_challenges (
+  id CHAR(36) NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  payment_method ENUM('card', 'upi', 'netbanking') NOT NULL,
+  otp_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  otp_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  consumed_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_payment_otp_user_created (user_id, created_at),
+  CONSTRAINT fk_payment_otp_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
@@ -238,12 +259,13 @@ CREATE TABLE orders (
   order_number    VARCHAR(32)     NOT NULL,
   user_id         BIGINT UNSIGNED NOT NULL,
   status          ENUM('pending', 'pending_collection', 'payment_failed', 'paid', 'confirmed', 'processing',
-                       'shipped', 'delivered', 'cancelled')
+                       'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'return_requested', 'returned')
                   NOT NULL DEFAULT 'pending',
   total_amount    DECIMAL(12, 2)  NOT NULL,
   currency        CHAR(3)         NOT NULL DEFAULT 'INR',
   payment_method  ENUM('card', 'upi', 'netbanking', 'cod') NOT NULL DEFAULT 'card',
-  payment_status  ENUM('pending', 'pending_collection', 'succeeded', 'failed') NOT NULL DEFAULT 'pending',
+  payment_status  ENUM('pending', 'pending_collection', 'succeeded', 'failed', 'collected') NOT NULL DEFAULT 'pending',
+  stock_reserved  TINYINT(1)      NOT NULL DEFAULT 0,
   recipient_name  VARCHAR(100)    NOT NULL,
   phone           VARCHAR(20)     NOT NULL,
   address_line1   VARCHAR(150)    NOT NULL,
@@ -285,6 +307,22 @@ CREATE TABLE order_items (
     ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT chk_order_items_quantity CHECK (quantity > 0),
   CONSTRAINT chk_order_items_price CHECK (unit_price >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Durable idempotency and retry state for post-commit order confirmation email.
+CREATE TABLE order_confirmation_email_deliveries (
+  order_id BIGINT UNSIGNED NOT NULL,
+  status ENUM('pending', 'sending', 'sent') NOT NULL DEFAULT 'pending',
+  attempts INT UNSIGNED NOT NULL DEFAULT 0,
+  lease_until DATETIME NULL,
+  last_error_category VARCHAR(64) NULL,
+  sent_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (order_id),
+  KEY idx_order_confirmation_delivery_retry (status, lease_until),
+  CONSTRAINT fk_order_confirmation_delivery_order FOREIGN KEY (order_id) REFERENCES orders(id)
+    ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
@@ -340,6 +378,18 @@ CREATE TABLE book_reviews (
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Contact form submissions are retained for follow-up by the Folio team.
+CREATE TABLE contact_submissions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(254) NOT NULL,
+  subject VARCHAR(150) NOT NULL,
+  message VARCHAR(4000) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_contact_submissions_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- -----------------------------------------------------------------------------
 -- payments: one row per payment ATTEMPT (an order may have several: a declined
 -- attempt can be retried). Status values are exactly the outcomes of the
@@ -349,7 +399,7 @@ CREATE TABLE book_reviews (
 --   * at most ONE pending attempt per order (active_order_id)
 --   * at most ONE succeeded payment per order (succeeded_order_id), so an order
 --     can never be paid twice
---   * provider_reference is the provider's id only - never card data [SEC-7]
+--   * provider_reference is a Folio simulation reference, never credentials
 --   Foreign keys have no ON UPDATE CASCADE because order_id feeds the generated
 --   columns below; payments are never cascade-deleted with orders.   [DB-1]
 -- -----------------------------------------------------------------------------
@@ -363,7 +413,6 @@ CREATE TABLE payments (
   status             ENUM('pending', 'succeeded', 'failed', 'cancelled', 'timed_out')
                      NOT NULL DEFAULT 'pending',
   provider_reference VARCHAR(100)    NULL,
-  provider_order_id  VARCHAR(100)    NULL,
   created_at         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   active_order_id    BIGINT UNSIGNED
@@ -373,7 +422,6 @@ CREATE TABLE payments (
   PRIMARY KEY (id),
   UNIQUE KEY uq_payments_idempotency (idempotency_key),
   UNIQUE KEY uq_payments_provider_reference (provider_reference),
-  UNIQUE KEY uq_payments_provider_order (provider_order_id),
   UNIQUE KEY uq_payments_one_pending_per_order (active_order_id),
   UNIQUE KEY uq_payments_one_success_per_order (succeeded_order_id),
   KEY idx_payments_order (order_id),

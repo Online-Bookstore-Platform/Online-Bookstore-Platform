@@ -14,7 +14,7 @@ describe('MySQL password reset persistence', databaseTests, () => {
   });
   after(async () => { await database?.drop(); });
 
-  it('expires and consumes tokens, hashes passwords, invalidates sibling tokens and revokes numeric and string sessions', async () => {
+  it('expires OTPs, limits attempts, replaces verified codes with a reset proof and revokes sessions', async () => {
     const suffix = randomUUID();
     const oldHash = await hashPassword('old-password-123');
     const newHash = await hashPassword('new-password-456');
@@ -27,7 +27,10 @@ describe('MySQL password reset persistence', databaseTests, () => {
     const sibling = 'c'.repeat(64);
 
     await repository.savePasswordReset(userId, expired, new Date(Date.now() - 60_000));
+    assert.equal(await repository.savePasswordReset(userId, 'f'.repeat(64), new Date(Date.now() + 5 * 60_000)), false, 'resend cooldown refuses an immediate replacement');
+    await database.pool.query('UPDATE password_reset_tokens SET created_at = UTC_TIMESTAMP() - INTERVAL 2 MINUTE WHERE user_id = ?', [userId]);
     await repository.savePasswordReset(userId, valid, new Date(Date.now() + 30 * 60_000));
+    await database.pool.query('UPDATE password_reset_tokens SET created_at = UTC_TIMESTAMP() - INTERVAL 2 MINUTE WHERE user_id = ?', [userId]);
     await repository.savePasswordReset(userId, sibling, new Date(Date.now() + 30 * 60_000));
     assert.equal(await repository.consumePasswordReset(expired, newHash), false);
 
@@ -38,9 +41,12 @@ describe('MySQL password reset persistence', databaseTests, () => {
       `reset-other-${suffix}`, expiry, JSON.stringify({ userId: String(otherId) }),
     ]);
 
-    assert.equal(await repository.consumePasswordReset(valid, newHash), true);
-    assert.equal(await repository.consumePasswordReset(valid, newHash), false);
-    assert.equal(await repository.consumePasswordReset(sibling, newHash), false);
+    assert.equal(await repository.consumePasswordReset(valid, newHash), false, 'issuing a replacement invalidates the previous credential');
+    const proofHash = 'd'.repeat(64);
+    assert.equal(await repository.verifyPasswordResetOtp(`reset-${suffix}@example.com`, '0'.repeat(64), proofHash, new Date(Date.now() + 10 * 60_000)), false);
+    assert.equal(await repository.verifyPasswordResetOtp(`reset-${suffix}@example.com`, sibling, proofHash, new Date(Date.now() + 10 * 60_000)), true);
+    assert.equal(await repository.consumePasswordReset(proofHash, newHash), true);
+    assert.equal(await repository.consumePasswordReset(proofHash, newHash), false);
 
     const [[updatedUser]] = await database.pool.query('SELECT password_hash AS passwordHash FROM users WHERE id = ?', [userId]);
     assert.equal(await verifyPassword('new-password-456', updatedUser.passwordHash), true);

@@ -1,35 +1,38 @@
-# Test Execution Report — Sprint 2 (Issue #25)
+# Test Execution Report — Folio Online Bookstore
 
 Functional, negative, regression and security testing of Folio (Online Bookstore Platform), executed
 against the test cases in the Software Test Plan (`PES2UG24CS565_PES2UG24CS575_PES2UG24CS601_Online_Bookstore_STP.pdf`).
 
 | | |
 |---|---|
-| Build under test | `main` @ `cfeb5a4`, plus the fixes in this branch (listed under *Fixes made during testing*) |
-| Executed | 29 October 2026 |
-| Executed by | Uditi Mourya (PES2UG24CS565) |
-| Environment | Ubuntu 24.04, Node.js 22, MySQL 8.0.46, Chromium (Playwright) |
+| Build under test | Current workspace implementation (database audit, Gmail OTP reset and simulated payment, and order lifecycle) |
+| Executed | 31 October 2026 |
+| Executed by | Automated repository verification |
+| Environment | Node.js, configured MySQL test database; frontend production build |
 | How to re-run | `cd backend && npm test` (MySQL needed, see `backend/.env.example`); `cd frontend && node --test "src/**/*.test.js" && npm run build` |
 
 ## Summary
 
 | Suite | Tests | Pass | Fail | Known defect (todo) |
 |---|---:|---:|---:|---:|
-| Backend: unit + integration + STP system tests (`npm test`) | 308 | 302 | 0 | 6 |
+| Backend: unit + integration + STP system tests (`npm test`) | 312 | 310 | 0 | 2 |
 | Frontend: unit tests | 85 | 85 | 0 | 0 |
 | Frontend production build (`npm run build`) | 1 | 1 | 0 | 0 |
 
-The STP system tests are new: `backend/test/system/stp.system.test.js`. They start the whole application
-exactly as `src/server.js` wires it (real sessions, real bcrypt, real MySQL transactions) on a throw-away
-database, and each test is named after the STP case it executes. External book providers are switched
-off inside the test, so the run is repeatable and needs no internet.
+The STP system tests start the application with real sessions, bcrypt, and MySQL transactions on a
+throw-away database. External book providers are switched off in that suite. The full backend run
+completed with 310 passing, no failing, and two documented TODO tests. Frontend verification completed
+with 85 passing tests and a successful production build.
 
 Known defects are written as `todo` tests: they assert what the SRS requires, run on every build, do not
 block it, and start passing once the defect is fixed.
 
-**Result: no critical or high-severity defect in the purchase path.** The purchase path covers sign-in,
-catalogue, cart, checkout, payment, stock and order history. Two High defects remain: two SRS features
-were never built (DEF-01, DEF-02).
+**Result:** Gmail OTP reset and simulated payment, payment/fulfillment separation, stock
+reservation, customer tracking, and administrator order controls are implemented. Real Gmail delivery
+was not run because mail credentials were not available in this environment. Payment
+confirmation was tested with an injected test mail sink; no gateway or financial transaction is used. The
+two remaining TODO tests are cart-stock error detail and concurrent
+catalogue lookup latency while Open Library is offline.
 
 ## Execution record
 
@@ -48,7 +51,7 @@ were never built (DEF-01, DEF-02).
 | SEC-1 | Search text is never run as SQL (`' OR 1=1 --`, `DROP TABLE`, `UNION SELECT`); no hash ever returned | Pass |
 | SEC-7 | Raw card data in a payment request is refused (`PAYMENT_DATA_NOT_ACCEPTED`); the schema has no card/CVV columns | Pass |
 | SEC-8 | A customer gets 403 on every admin book and stock route and changes nothing; customers cannot read, change or pay each other's carts/orders/payments (IDOR) | Pass |
-| SEC | Error answers contain no stack traces or raw database errors; `X-Powered-By` is off | Pass (see DEF-03 for one exception) |
+| SEC | Error answers contain no stack traces or raw database errors; `X-Powered-By` is off | Pass |
 | SEC-2 | HTTPS / TLS in transit | Not run: needs the production host (cookie `secure` flag is already on when `NODE_ENV=production`) |
 
 ### Catalogue and search (SRS 5.2)
@@ -70,15 +73,15 @@ were never built (DEF-01, DEF-02).
 | TC-CART-01 | Add to cart; price comes from the catalogue; adding again increases the same line | Pass |
 | TC-CART-02 | Changing quantity recalculates the total; the cart is kept on the server across sessions | Pass |
 | TC-CART-03 | Remove a line; removing something not in the cart is a 404 | Pass |
-| TC-CART-04 | Quantity 0, −1, 1.5, text, 10²¹, unknown book, out-of-stock book, more than the stock: all refused, nothing added | Pass (message wording: DEF-04) |
+| TC-CART-04 | Quantity 0, −1, 1.5, text, 10²¹, unknown book, out-of-stock book, more than the stock: all refused, nothing added | Pass (stock explanation detail remains TODO: DEF-04) |
 | TC-CHK-01 | Delivery details validated, tidied (spaces, phone format) and saved | Pass |
 | TC-CHK-02 | Order summary recalculated on the server; a price change is picked up | Pass |
 | TC-CHK-03 | Every missing/invalid delivery field reported individually; empty cart cannot be checked out | Pass |
-| TC-PAY-01 / TC-ORD-01 | Successful payment: order gets an id, becomes *paid*, amount = server-side total, cart cleared | Pass |
+| TC-PAY-01 / TC-ORD-01 | Verified payment: order gets an id, fulfillment becomes `confirmed`, payment status becomes `succeeded`, server total is charged, cart cleared | Pass |
 | TC-PAY-02 | Declined, cancelled and timed-out payments leave the order unpaid and stock untouched; the order can be paid later | Pass |
-| TC-PAY-03 | Missing `Idempotency-Key` refused; the same request sent twice at once creates one payment; a paid order cannot be paid again; another customer cannot reuse the key | Pass (message wording: DEF-05) |
+| TC-PAY-03 | Missing `Idempotency-Key` refused; retries reuse one attempt; paid orders cannot be paid again; another customer cannot reuse the key | Pass |
 | TC-ORD-02 | Order history shows only the customer's own orders, newest first | Pass |
-| TC-ORD-03 | Tracking shows the status timeline; cancellation | Pass for tracking. Cancellation **Fail** (DEF-01) |
+| TC-ORD-03 / TC-ORD-04 | Customer tracking shows persisted status history; eligible pending orders can be cancelled and stock restored; delivered orders can request returns | Pass |
 | BR-3 | A later price change never changes an existing order | Pass |
 | TC-INV-01 | Stock goes down by the quantity bought, only when payment succeeds | Pass |
 | TC-INV-02 / BR-1 | Stock that runs out between checkout and payment blocks the purchase; nothing charged, nothing deducted | Pass |
@@ -89,16 +92,17 @@ were never built (DEF-01, DEF-02).
 | STP case | What was checked | Result |
 |---|---|---|
 | TC-ADM-01 | Admin signs in and gets the admin role | Pass |
-| TC-ADM-02 | Add / edit / re-price / remove a book; missing fields and zero or negative price refused; a removed book leaves the catalogue but old orders still show it | Pass (duplicate ISBN: DEF-03) |
+| TC-ADM-02 | Add / edit / re-price / remove a book; missing fields and zero or negative price refused; duplicate ISBN is a clear 409; removed books leave old orders intact | Pass |
 | TC-ADM-03 | Set an exact stock count, add/remove copies, below zero refused, every change audited with the admin's id | Pass |
-| TC-ADM-03 | View customer orders and update their status | **Fail**: not implemented (DEF-02) |
+| TC-ADM-04 / TC-ADM-05 | Admin lists orders, views details, advances legal fulfillment states, cancels eligible orders, collects delivered COD, and records returns | Pass |
+| TC-ADM-02 | Duplicate ISBN returns a clear 409 without database error details | Pass |
 
 ### Non-functional (spot checks on one machine)
 
 | STP case | What was checked | Result |
 |---|---|---|
 | PERF-1 | A catalogue search answers within 2 s | Pass |
-| PERF-1 | 10 simultaneous searches during a provider outage within 2 s | **Fail** (DEF-06) |
+| PERF-1 | 10 simultaneous searches during a provider outage within 2 s | TODO (DEF-06) |
 | PERF-2 | Order + payment within 3 s | Pass |
 | PERF-4 / SCAL | 100 simultaneous book-detail requests, all correct, well under 3 s | Pass |
 | PERF / SCAL at 500 users | Not run: needs a load-testing host |
@@ -108,24 +112,22 @@ were never built (DEF-01, DEF-02).
 
 ## Regression
 
-The full existing suite (unit + integration tests written by all three members during Sprints 1–2) was
-re-run after every change in this branch: 302 / 302 backend and 85 / 85 frontend tests pass, and the
-frontend builds.
+Latest verification ran the full backend suite: 312 tests, 310 pass, 0 fail, 2 todo. Frontend verification:
+85 / 85 tests pass; Vite production build passes. The full MySQL system suite includes 42 passing cases and
+two documented TODOs.
 
 ## Defect log
 
-| ID | Severity | Area / owner | Defect | Steps / evidence | Status |
+| ID | Severity | Area | Defect | Evidence | Status |
 |---|---|---|---|---|---|
-| DEF-01 | High | Orders (Vrinda) | A customer cannot cancel an order (SRS 5.6, BR-2): there is no cancel endpoint or button | `POST /api/orders/:id/cancel` → 404. Test `DEF-01` | Open, deferred: feature freeze |
-| DEF-02 | High | Admin (Varchas) | No administrator order management: an admin cannot list orders or move them to Processing / Shipped / Delivered (SRS 5.8, 5.9) | `GET /api/admin/orders` → 404. Test `DEF-02` | Open, deferred: feature freeze |
-| DEF-03 | Medium | Admin books (Varchas) | Adding a book with an ISBN that already exists answers **500** and the error code `ER_DUP_ENTRY` reaches the client | `POST /api/admin/books` with an existing ISBN. Test `DEF-03` | Open: small fix (map `ER_DUP_ENTRY` → 409 `DUPLICATE_ISBN`) |
-| DEF-04 | Low | Cart (Vrinda) | Raising a cart quantity above the stock answers `BOOK_UNAVAILABLE` ("out of stock") even though copies are in stock; adding to cart correctly says `INSUFFICIENT_STOCK` | `PATCH /api/cart/items/:id {quantity: 50}` with 5 in stock. Test `DEF-04` | Open |
-| DEF-05 | Low | Payments (Varchas) | Paying an order that is already paid answers 404 "order not found" instead of 409 "already paid". No double charge happens | Second `POST /api/payments/orders/:id`. Test `DEF-05` | Open |
-| DEF-06 | Low | Catalogue (Uditi) | During an Open Library outage, requests to it are queued one per second (its usage policy), so 10 simultaneous searches take 10–20 s | Test `DEF-06` | Open: needs a short "provider is down" circuit breaker; deferred |
-| DEF-07 | High | Orders / transactions (Uditi) | Several customers checking out the same book at the same moment got **500 `ER_LOCK_DEADLOCK`** for all but one | Test `TC-INV-03` | **Fixed**: `withTransaction` now re-runs a transaction MySQL chose as a deadlock victim (up to 3 times) |
-| DEF-08 | Medium | Catalogue (Uditi) | Browsing the catalogue showed an error page whenever both book providers were unreachable | Test `TC-CAT-04` | **Fixed**: falls back to the store's own books with a notice |
-| DEF-09 | Low | Platform | No security headers (CSP, HSTS, `X-Content-Type-Options`, frame protection) | Response headers of any page | Open: add `helmet` at deployment |
-| DEF-10 | Low | Frontend tooling | `frontend/package.json` has no `test` script (tests run with `node --test "src/**/*.test.js"`) | — | Open |
+| DEF-04 | Low | Cart | Quantity above available stock does not explain the available count consistently | `TC-CART-04` | TODO; request is rejected safely |
+| DEF-06 | Low | Catalogue | Concurrent provider lookups can queue during an Open Library outage | `PERF-1` concurrency case | TODO; offline catalogue fallback remains available |
+| DEF-07 | High | Transactions | Concurrent checkouts can encounter a database deadlock | `TC-INV-03` | Fixed with bounded deadlock retry |
+| DEF-08 | Medium | Catalogue | Provider outage previously showed an error page | `TC-CAT-04` | Fixed with local catalogue fallback |
+| DEF-09 | Low | Platform | Deployment security headers require production review | Response headers | Deployment follow-up |
+| DEF-10 | Low | Frontend tooling | Tests use Node's test runner directly | Frontend command in this report | Open |
+
+DEF-01 (customer cancellation), DEF-02 (admin order operations), DEF-03 (duplicate ISBN response), and DEF-05 (already-paid response) are fixed and covered by passing system tests.
 
 ## Fixes made during testing
 

@@ -45,7 +45,7 @@
 
 **Folio** is a full-stack online bookstore application designed to provide readers with a convenient way to discover books, explore categories, review book information, and manage purchases through an integrated shopping experience.
 
-The platform combines an interactive React frontend with an Express.js backend and a MySQL database. It supports external book discovery, persistent application data, authenticated user workflows, catalogue administration, simulated checkout, and order management.
+The platform combines an interactive React frontend with an Express.js backend and a MySQL database. It supports external book discovery, persistent application data, authenticated user workflows, catalogue administration, simulated Gmail-OTP payment, and order management.
 
 Folio is developed as a collaborative software engineering project, with modular features designed to support maintainability, testing, and future extension.
 
@@ -77,7 +77,7 @@ Folio is developed as a collaborative software engineering project, with modular
 - User registration and login.
 - Session-based authentication.
 - Account and profile management.
-- Password-reset workflow with expiring reset tokens.
+- Gmail-delivered six-digit password-reset OTP with expiry, attempt limits, and session revocation.
 - Protected routes and authenticated operations.
 
 ### Book Details and Reviews
@@ -97,8 +97,8 @@ Folio is developed as a collaborative software engineering project, with modular
 ### Checkout and Orders
 
 - Review order details before placing an order.
-- Support simulated prepaid payment workflows.
-- Support Cash on Delivery where configured and eligible.
+- Support simulated card, UPI, and net-banking checkout confirmed with a Gmail OTP.
+- Support Cash on Delivery with payment collection tracked separately.
 - Display order confirmation and order history.
 - Track order and payment statuses separately.
 - Provide appropriate handling for failed, cancelled, or incomplete checkout attempts.
@@ -107,6 +107,7 @@ Folio is developed as a collaborative software engineering project, with modular
 
 - Create and update catalogue entries.
 - Manage product pricing and inventory.
+- Review customer orders, move fulfillment through legal states, and record COD collection and return decisions.
 - Use administrative authorization for protected management operations.
 - Support catalogue and inventory workflows through the application interface.
 
@@ -310,10 +311,8 @@ Common configuration keys include:
 | `DB_NAME` | Database name |
 | `DB_USER` | Database username |
 | `DB_PASSWORD` | Database password |
-| `DEV_PASSWORD_RESET_LINK` | Enables the explicitly configured development password-reset link behaviour |
+| `EMAIL_FROM`, `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Gmail SMTP for password reset and simulated-payment OTP; use a Google App Password |
 | `VARCHAS_ADAPTER_MODULE` | Optional module for custom backend adapters |
-| `PAYMENT_PROVIDER` | Payment provider configuration, if supported by the active implementation |
-| `FOLIO_CHECKOUT_OUTCOME` | Configured simulated checkout outcome, if enabled by the active implementation |
 
 The exact variables required depend on the current backend configuration. Refer to `backend/.env.example` and the backend configuration code for the authoritative list.
 
@@ -323,8 +322,7 @@ The exact variables required depend on the current backend configuration. Refer 
 - Keep `.env.example` limited to safe placeholder values.
 - Use strong session secrets outside development.
 - Do not expose database credentials or private API keys in frontend code.
-- Disable development-only reset-link behaviour in production.
-- Never use simulated payment configuration as a substitute for a real payment provider in a production commerce deployment.
+- Keep Gmail secrets on the backend only.
 
 ## Database Setup
 
@@ -333,10 +331,9 @@ Folio uses MySQL for persistent application data.
 ### Initialize the database
 
 1. Start your local MySQL server.
-2. Create the database configured in `backend/.env`.
-3. Inspect `backend/database/schema.sql`.
-4. Apply the required SQL migrations from `backend/database/migrations/`.
-5. Verify that the application can connect using the configured database credentials.
+2. Configure the database settings in `backend/.env`.
+3. Run `npm run db:setup` from `backend` to create or safely upgrade the database.
+4. Verify that the application can connect using the configured database credentials.
 
 Consult the database documentation:
 
@@ -345,9 +342,7 @@ Consult the database documentation:
 
 ### Migrations
 
-The repository contains migrations for features such as password-reset tokens and Cash on Delivery order support.
-
-Apply migrations according to the project's documented migration procedure. Avoid repeatedly applying non-idempotent migrations or manually modifying production data.
+The migration runner records applied changes in `schema_migrations`. It preserves application rows and does not reset an existing database. `npm run db:reset` drops data and is for disposable local databases only.
 
 **Important:** Do not drop or reset an existing database just to initialize the project unless you intentionally want to lose its data. Back up data before making schema changes.
 
@@ -389,7 +384,7 @@ Start both applications and verify that the frontend can reach the backend API u
 
 ### Authentication
 
-Handles registration, login, session management, protected operations, and password-reset workflows.
+Handles registration, login, protected operations, and a Gmail-delivered six-digit password-reset OTP. Codes expire in five minutes, have resend and attempt limits, and a completed reset revokes active sessions.
 
 ### Catalogue
 
@@ -405,7 +400,7 @@ Manages selected products and quantities before checkout.
 
 ### Checkout and Payments
 
-Handles checkout input, payment method selection, simulated payment outcomes, order creation, and checkout status.
+Handles demo-only card, UPI, and net-banking payment selections confirmed through Gmail OTP, plus a separate Cash on Delivery flow.
 
 ### Orders
 
@@ -442,28 +437,13 @@ External discovery results and locally managed products may have different capab
 
 ## Checkout and Payment Processing
 
-Folio includes checkout workflows designed to demonstrate an integrated ecommerce experience.
-
-Depending on the active configuration, supported payment options may include:
-
-- Card-style simulated checkout.
-- UPI-style simulated checkout.
-- Net banking-style simulated checkout.
-- Cash on Delivery.
-
-### Simulated payments
-
-The configured simulated payment flow can represent outcomes such as approved, declined, cancelled, or timed-out checkout attempts.
-
-These outcomes are for application workflow testing. **They do not establish that money has been transferred or that a real payment gateway has processed a transaction.**
-
-A real payment integration requires an appropriately configured provider, server-side verification, secure webhook handling, and reconciliation of payment status.
+Card, UPI, and net-banking selections are demonstration-only. A cryptographically generated Gmail OTP confirms a simulated payment; Folio does not connect to a payment gateway, collect financial credentials, or transfer money. The order and successful payment record are created atomically only after OTP verification. See [`backend/database/PAYMENTS.md`](backend/database/PAYMENTS.md).
 
 ### Cash on Delivery
 
 Cash on Delivery follows a different payment lifecycle from prepaid orders. An order placed with COD must not be treated as prepaid or marked paid before the applicable collection and confirmation process.
 
-Order status and payment status should be tracked independently.
+Order status and payment status are stored separately. COD remains due until an administrator marks collection after delivery. See [`backend/database/ORDER_LIFECYCLE.md`](backend/database/ORDER_LIFECYCLE.md) for status transitions and stock reservation rules.
 
 ## Security and Data Integrity
 
@@ -481,7 +461,7 @@ Important safeguards include:
 
 These safeguards should be verified against the current implementation before deployment.
 
-For production use, additionally review HTTPS, secure cookie settings, CSRF protection where applicable, session expiry and invalidation, rate limiting, database permissions, secret management, logging, and payment-provider security requirements.
+For production use, additionally review HTTPS, secure cookie settings, CSRF protection where applicable, session expiry and invalidation, rate limiting, database permissions, secret management, logging, and Gmail OTP protection.
 
 ## Testing
 
@@ -552,9 +532,9 @@ Before committing:
 | Login or session persistence fails | Review session configuration, cookie settings, and frontend API credentials handling. |
 | Catalogue returns no results | Check provider availability, category mapping, search terms, and filtering logic. |
 | Book covers do not load | Check image URLs, provider metadata, fallback handling, and browser network errors. |
-| Checkout fails | Inspect backend validation, configured simulated outcomes, stock, and order persistence. |
+| Checkout fails | Check backend validation, Gmail App Password configuration, OTP cooldown/expiry, and stock availability. |
 | COD order is incorrectly marked paid | Verify payment and fulfilment status transitions and the relevant database migration. |
-| Password reset does not work | Check migration status, token expiration, development configuration, and email/reset-link behaviour. |
+| Password reset does not work | Check migration status, OTP expiry, Gmail App Password, and the `EMAIL_FROM`, `GMAIL_USER`, and `GMAIL_APP_PASSWORD` settings. |
 | Frontend build fails | Check dependency installation, syntax errors, and build output. |
 | Database integration tests fail | Confirm the test database and required migrations are configured correctly. |
 
@@ -562,11 +542,9 @@ Before committing:
 
 Potential improvements include:
 
-- Integration with a real payment provider and secure webhook verification.
-- Email-based password recovery and order notifications.
+- Order notifications by email.
 - Advanced recommendations and personalized book discovery.
 - Improved catalogue ranking and search relevance.
-- Enhanced order fulfilment and tracking.
 - Additional accessibility testing.
 - Performance monitoring and production deployment automation.
 - Expanded integration and end-to-end testing.

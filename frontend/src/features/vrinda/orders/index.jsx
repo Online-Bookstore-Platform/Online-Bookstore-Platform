@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, loginPath } from '../../uditi/shared/api.js';
-import { getOrderTracking, getOrders } from '../api.js';
+import { cancelOrder, getOrderTracking, getOrders, requestOrderReturn } from '../api.js';
 import styles from './Orders.module.css';
 
 const STATUSES = {
@@ -11,19 +11,19 @@ const STATUSES = {
   paid: 'Order confirmed',
   confirmed: 'Confirmed',
   processing: 'Being prepared',
+  packed: 'Packed',
   shipped: 'On its way',
+  out_for_delivery: 'Out for delivery',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+  return_requested: 'Return requested',
+  returned: 'Returned',
 };
 const money = amount => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount ?? 0);
 const date = value => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
-const ONLINE_STATUS_STEPS = ['pending', 'paid', 'confirmed', 'processing', 'shipped', 'delivered'];
-const COD_STATUS_STEPS = ['pending_collection', 'confirmed', 'processing', 'shipped', 'delivered'];
-const customerPaymentStatus = order => order.paymentMethod === 'cod'
-  ? 'Due on delivery'
-  : order.status === 'paid' ? 'Order confirmed'
-    : order.status === 'payment_failed' ? 'Not completed'
-      : 'Awaiting checkout';
+const STATUS_STEPS = ['pending', 'confirmed', 'processing', 'packed', 'shipped', 'out_for_delivery', 'delivered'];
+const paymentMethodLabel = method => ({ upi: 'UPI', card: 'Card', netbanking: 'Net banking', cod: 'Cash on delivery' }[method] || method || 'Card');
+const customerPaymentStatus = order => ({ pending: 'Awaiting verification', pending_collection: 'Due on delivery', succeeded: 'Verified by email', collected: 'Collected', failed: 'Verification failed' }[order.paymentStatus] || order.paymentStatus || 'Awaiting verification');
 
 export default function OrdersPage({ tracking = false }) {
   const { orderId } = useParams();
@@ -70,10 +70,12 @@ export default function OrdersPage({ tracking = false }) {
       </div>
     </main>;
 
-    const statusSteps = order.paymentMethod === 'cod' ? COD_STATUS_STEPS : ONLINE_STATUS_STEPS;
+    const statusSteps = STATUS_STEPS;
+    const trackingStatus = order.status === 'pending_collection' ? 'pending' : order.status === 'paid' ? 'confirmed' : ['return_requested', 'returned'].includes(order.status) ? 'delivered' : order.status;
     const completedIndex = order.status === 'payment_failed' || order.status === 'cancelled'
       ? -1
-      : statusSteps.indexOf(order.status);
+      : statusSteps.indexOf(trackingStatus);
+    const historyByStatus = new Map(history.map(event => [event.toStatus === 'pending_collection' ? 'pending' : event.toStatus === 'paid' ? 'confirmed' : event.toStatus, event.createdAt]));
 
     return <main className={styles.page}>
       <Link className={styles.back} to="/orders">← Your orders</Link>
@@ -88,31 +90,36 @@ export default function OrdersPage({ tracking = false }) {
           <span className={`${styles.badge} ${order.status === 'cancelled' ? styles.stopped : ''}`}>{STATUSES[order.status] ?? order.status}</span>
         </div>
         {completedIndex >= 0 && <ol className={styles.progress} aria-label="Order progress">
-          {statusSteps.filter(status => status !== 'pending').map((status, index) => {
-            const actualIndex = index + (order.paymentMethod === 'cod' ? 0 : 1);
-            return <li key={status} className={actualIndex <= completedIndex ? styles.complete : ''} aria-current={status === order.status ? 'step' : undefined}>
+          {statusSteps.map((status, index) => {
+            const current = status === trackingStatus;
+            return <li key={status} className={`${index < completedIndex ? styles.complete : ''} ${current ? styles.current : ''}`} aria-current={current ? 'step' : undefined}>
               <span className={styles.stepDot} aria-hidden="true" />
-              <span>{STATUSES[status]}</span>
+              <span>{status === 'pending' ? 'Order placed' : STATUSES[status]}</span>
+              {historyByStatus.has(status) && <time dateTime={historyByStatus.get(status)}>{date(historyByStatus.get(status))}</time>}
             </li>;
           })}
         </ol>}
         {order.paymentMethod === 'cod' && <p className={styles.pendingNote}>Cash on delivery selected. Payment is due when your books arrive.</p>}
         {order.paymentMethod !== 'cod' && (order.status === 'pending' || order.status === 'payment_failed') && <p className={styles.pendingNote}>Your order is waiting for checkout confirmation. You can return to checkout to try again.</p>}
-        <p className={styles.paymentStatus}>Payment method: <strong>{order.paymentMethod === 'cod' ? 'Cash on delivery' : order.paymentMethod ?? 'Card'}</strong></p>
+        <p className={styles.paymentStatus}>Payment method: <strong>{paymentMethodLabel(order.paymentMethod)}</strong></p>
         <p className={styles.paymentStatus}>Payment status: <strong>{customerPaymentStatus(order)}</strong></p>
         {(order.status === 'cancelled' || order.status === 'payment_failed') && <ol className={styles.history} aria-label="Order status history">
           {history.map((event, index) => <HistoryEvent key={`${event.toStatus}-${index}`} event={event} />)}
         </ol>}
       </section>
+      {order.status === 'delivered' && <button type="button" onClick={async () => { try { await requestOrderReturn(order.id); setReloadKey(value => value + 1); } catch (err) { setError(err.message); } }}>Request a return</button>}
+      {['pending', 'pending_collection'].includes(order.status) && order.paymentStatus !== 'succeeded' && <button type="button" onClick={async () => { try { await cancelOrder(order.id); setReloadKey(value => value + 1); } catch (err) { setError(err.message); } }}>Cancel order</button>}
       <div className={styles.detailsGrid}>
         <section className={styles.panel}>
           <p className="eyebrow">In this parcel</p>
           <h2>Order details</h2>
           <ul className={styles.lineItems}>{(order.items ?? []).map(item => <li key={item.bookId}>
-            <div><h3>{item.title}</h3><p>{item.quantity} {item.quantity === 1 ? 'copy' : 'copies'} × {money(item.unitPrice)}</p></div>
+            {item.coverImageUrl ? <img src={item.coverImageUrl} alt={`Cover of ${item.title}`} loading="lazy" /> : <div className={styles.coverFallback} aria-hidden="true">folio.</div>}
+            <div className={styles.itemCopy}><h3>{item.title}</h3><p>{item.quantity} {item.quantity === 1 ? 'copy' : 'copies'} × {money(item.unitPrice)}</p></div>
             <strong>{money(item.lineTotal)}</strong>
           </li>)}</ul>
-          <div className={styles.total}><span>Total</span><strong>{money(order.totalAmount)}</strong></div>
+          <div className={styles.amountRows}><div><span>Subtotal</span><strong>{money(order.subtotalAmount ?? order.totalAmount)}</strong></div><div><span>Delivery charge</span><strong>{order.deliveryCharge === 0 ? 'Free' : money(order.deliveryCharge)}</strong></div></div>
+          <div className={styles.total}><span>Final amount</span><strong>{money(order.totalAmount)}</strong></div>
         </section>
         <section className={styles.panel}>
           <p className="eyebrow">Delivery details</p>
@@ -124,6 +131,7 @@ export default function OrdersPage({ tracking = false }) {
         <p className="eyebrow">Updates</p><h2>Order timeline</h2>
         <ol className={styles.history}>{history.map((event, index) => <HistoryEvent key={`${event.toStatus}-${index}`} event={event} />)}</ol>
       </section>}
+      <Link className={styles.continueShopping} to="/catalogue">Continue shopping <span aria-hidden="true">↗</span></Link>
     </main>;
   }
 
@@ -144,7 +152,7 @@ export default function OrdersPage({ tracking = false }) {
       : <section className={styles.orderList} aria-label="Your orders">
         {orders.map(item => <article className={styles.orderCard} key={item.id}>
           <div className={styles.orderMeta}><p className="eyebrow">Order {item.orderNumber}</p><span>{date(item.createdAt)}</span></div>
-          <div className={styles.orderMain}><div><h2>{STATUSES[item.status] ?? item.status}</h2><p>{money(item.totalAmount)} <span>·</span> {item.currency}</p><p>Payment method: {item.paymentMethod === 'cod' ? 'Cash on delivery' : item.paymentMethod ?? 'Card'} · {customerPaymentStatus(item)}</p></div><Link to={`/orders/${item.id}`}>Track order <span aria-hidden="true">↗</span></Link></div>
+          <div className={styles.orderMain}><div><h2>{STATUSES[item.status] ?? item.status}</h2><p>{money(item.totalAmount)} <span>·</span> {item.currency}</p><p>Payment method: {paymentMethodLabel(item.paymentMethod)} · {customerPaymentStatus(item)}</p></div><Link to={`/orders/${item.id}`}>Track order <span aria-hidden="true">↗</span></Link></div>
         </article>)}
       </section>}
   </main>;
@@ -153,8 +161,10 @@ export default function OrdersPage({ tracking = false }) {
 function HistoryEvent({ event }) {
   const note = event.toStatus === 'paid'
     ? 'Your order was confirmed at checkout.'
+    : event.toStatus === 'confirmed' && /simulat/i.test(event.note || '')
+      ? 'Payment verified by email and order confirmed.'
     : event.toStatus === 'payment_failed'
-      ? 'Checkout was not completed. Your order remains unpaid.'
+      ? 'Checkout was not completed. Your order was not confirmed.'
       : event.note;
   return <li className={styles.historyEvent}>
     <span className={styles.historyDot} aria-hidden="true" />

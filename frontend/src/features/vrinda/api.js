@@ -10,6 +10,8 @@ export const removeCartItem = itemId => apiRequest(`/api/cart/items/${encodeURIC
 export const getOrders = signal => apiRequest('/api/orders', { signal }).then(result => result.orders);
 export const getOrder = (orderId, signal) => apiRequest(`/api/orders/${encodeURIComponent(orderId)}`, { signal }).then(result => result.order);
 export const getOrderTracking = (orderId, signal) => apiRequest(`/api/orders/${encodeURIComponent(orderId)}/tracking`, { signal }).then(result => result.tracking);
+export const requestOrderReturn = orderId => apiRequest(`/api/orders/${encodeURIComponent(orderId)}/return`, { method: 'POST' }).then(result => result.order);
+export const cancelOrder = orderId => apiRequest(`/api/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' }).then(result => result.order);
 
 export function fieldErrors(error) {
   return Object.fromEntries((error?.details ?? []).map(detail => [detail.field, detail.message]));

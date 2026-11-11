@@ -395,6 +395,18 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
     return { books: books.slice(start, start + pageSize), pagination: { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) } };
   }
 
+  async function attachRatings(books) {
+    if (!pool || !books.length) return books.map(book => ({ ...book, rating: null }));
+    const identities = books.map(book => book.provider === 'openlibrary' ? book.id : book.provider === 'local' ? `local:${book.id}` : book.provider === 'googlebooks' ? `google:${book.providerId}` : '');
+    const keys = [...new Set(identities.filter(Boolean))];
+    if (!keys.length) return books.map(book => ({ ...book, rating: null }));
+    const placeholders = keys.map(() => '?').join(',');
+    const [ratings] = await pool.query(`SELECT book_id AS bookId, COUNT(*) AS count, AVG(rating) AS average
+      FROM book_reviews WHERE ${['production', 'test'].includes(env.NODE_ENV) ? 'is_demo = 0 AND ' : ''}book_id IN (${placeholders}) GROUP BY book_id`, keys);
+    const byKey = new Map(ratings.map(row => [row.bookId, { count: Number(row.count), average: Number(row.average) }]));
+    return books.map((book, index) => ({ ...book, rating: byKey.get(identities[index]) || null }));
+  }
+
   async function findLocalBooksById(id) {
     if (!pool) return null;
     const [rows] = await pool.query(
@@ -518,7 +530,7 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
             const browse = browseStoreBooks(await browseLocalBooks(), req, { categoryIds, sort, order, page, pageSize });
             if (!browse) return res.status(400).json({ error: { code: 'INVALID_FILTER', message: 'Choose a valid store price range and availability filter.' } });
             res.set('Cache-Control', 'no-store');
-            return res.json({ ...browse, source: 'local', providerNotice: 'Showing local catalogue results while discovery providers are unavailable.' });
+            return res.json({ ...browse, books: await attachRatings(browse.books), source: 'local', providerNotice: 'Showing local catalogue results while discovery providers are unavailable.' });
           }
           result = { books: [], totalItems: 0, provider: 'local' };
         }
@@ -551,6 +563,7 @@ export function createOpenLibraryCatalogueRouter({ pool, fetchImpl = globalThis.
       const pageExternal = localSearchMode ? eligibleExternal.slice(providerIndex, providerIndex + externalSlots) : eligibleExternal;
       let books = [...localPage, ...pageExternal];
       books = deduplicate(books);
+      books = await attachRatings(books);
       const minimumPrice = req.query.minPrice === undefined ? null : Number(req.query.minPrice);
       const maximumPrice = req.query.maxPrice === undefined ? null : Number(req.query.maxPrice);
       const availability = String(req.query.availability || 'all');

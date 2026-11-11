@@ -18,7 +18,12 @@ export function createAdminBooksRouter({ books, requireAdmin }) {
   router.use(...requireAdmin);
   router.get('/books', asyncHandler(async (_request, response) => response.json({ books: await books.list() })));
   router.post('/books', asyncHandler(async (request, response) => {
-    const book = await books.create(validateBookInput(request.body));
+    let book;
+    try { book = await books.create(validateBookInput(request.body)); }
+    catch (error) {
+      if (error.code === 'ER_DUP_ENTRY') throw new HttpError(409, 'DUPLICATE_BOOK_IDENTIFIER', 'A book with that ISBN or provider identifier already exists.');
+      throw error;
+    }
     response.status(201).json({ book });
   }));
   router.patch('/books/:bookId', asyncHandler(async (request, response) => {

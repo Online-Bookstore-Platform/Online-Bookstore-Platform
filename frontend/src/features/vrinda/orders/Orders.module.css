@@ -24,24 +24,33 @@
 .statusHead .eyebrow { margin: 0 0 7px; }
 .badge { padding: 7px 10px; border-radius: 20px; background: var(--success-surface); color: var(--success-text); font-size: .72rem; white-space: nowrap; }
 .stopped { background: var(--danger-surface); color: var(--danger-text); }
-.progress { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 32px 0 12px; padding: 0; list-style: none; }
+.progress { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin: 32px 0 12px; padding: 0; list-style: none; }
 .progress li { position: relative; display: grid; justify-items: start; gap: 9px; color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .progress li::before { position: absolute; content: ''; left: 10px; right: -8px; top: 8px; height: 1px; background: var(--line); }
 .progress li:last-child::before { display: none; }
 .progress li.complete { color: var(--ink); }
 .stepDot,.historyDot { position: relative; z-index: 1; width: 17px; height: 17px; border: 1px solid #c8c6bc; border-radius: 50%; background: var(--surface); }
 .complete .stepDot { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 4px var(--surface); }
+.current .stepDot { border: 2px solid var(--accent); background: var(--surface); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.progress li.current { color: var(--ink); font-weight: 650; }
+.progress time { color: var(--muted); font-size: .63rem; font-weight: 400; line-height: 1.3; }
 .pendingNote { margin: 20px 0 0; padding: 13px 15px; border-left: 3px solid #b18a4d; background: var(--warning-surface); color: var(--warning-text); font-size: .8rem; line-height: 1.6; }
 .paymentStatus { margin: 18px 0 0; color: var(--muted); font-size: .82rem; }.paymentStatus strong { color: var(--ink); text-transform: capitalize; }
 .detailsGrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 22px; margin-bottom: 22px; }
 .panel .eyebrow { margin: 0 0 8px; }
 .panel h2 { margin-bottom: 18px; }
 .lineItems { margin: 0; padding: 0; list-style: none; }
-.lineItems li { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 13px 0; border-top: 1px solid var(--line); }
+.lineItems li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 0; border-top: 1px solid var(--line); }
+.lineItems img,.coverFallback { flex: 0 0 48px; width: 48px; height: 64px; border-radius: 2px; object-fit: cover; background: var(--surface-soft); }
+.coverFallback { display: grid; place-items: center; color: var(--accent); font: italic .65rem var(--serif); }
+.itemCopy { flex: 1; min-width: 0; }
 .lineItems h3 { margin: 0; font: 500 1rem/1.35 var(--serif); }
 .lineItems p { margin: 5px 0 0; color: var(--muted); font-size: .78rem; }
 .lineItems strong { font-size: .85rem; white-space: nowrap; }
 .total { display: flex; justify-content: space-between; gap: 14px; padding-top: 16px; border-top: 1px solid var(--line); font-size: .9rem; }
+.amountRows { display: grid; gap: 9px; margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; }
+.amountRows > div { display: flex; justify-content: space-between; gap: 14px; }.amountRows strong { color: var(--ink); }
+.continueShopping { display: inline-flex; align-items: center; gap: 12px; min-height: 46px; margin-top: 22px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: var(--paper); font-size: .82rem; text-decoration: none; }
 .panel address { color: var(--muted); font-size: .85rem; font-style: normal; line-height: 1.7; overflow-wrap: anywhere; }
 .history { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .historyEvent { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 13px; padding: 0 0 19px; }
@@ -57,5 +66,5 @@
 .stateActions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 12px; }
 .stateActions button { min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: var(--paper); font: inherit; font-size: .83rem; cursor: pointer; }
 .state .textLink { color: var(--ink); }
-@media (max-width: 760px) { .detailsGrid { grid-template-columns: minmax(0, 1fr); }.progress { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 18px; }.progress li:nth-child(3)::before { display: none; } }
-@media (max-width: 520px) { .page { padding: 44px 20px 80px; }.orderMain { align-items: flex-start; flex-direction: column; }.orderMain h2 { font-size: 1.35rem; }.statusHead { align-items: flex-start; flex-direction: column; }.progress { grid-template-columns: repeat(2, minmax(0, 1fr)); }.progress li:nth-child(2)::before,.progress li:nth-child(4)::before { display: none; } }
+@media (max-width: 760px) { .detailsGrid { grid-template-columns: minmax(0, 1fr); }.progress { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 18px; }.progress li:nth-child(4)::before { display: none; } }
+@media (max-width: 520px) { .page { padding: 44px 20px 80px; }.orderMain { align-items: flex-start; flex-direction: column; }.orderMain h2 { font-size: 1.35rem; }.statusHead { align-items: flex-start; flex-direction: column; }.progress { grid-template-columns: repeat(2, minmax(0, 1fr)); }.progress li:nth-child(2n)::before { display: none; } }

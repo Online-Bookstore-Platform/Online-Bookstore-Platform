@@ -1,69 +1,92 @@
+import { createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { HttpError } from '../errors.js';
+import { logSmtpFailure } from '../authentication/email.service.js';
 
-const validStatuses = new Set(['pending', 'succeeded', 'failed', 'cancelled', 'timed_out']);
+const METHODS = new Set(['card', 'upi', 'netbanking']);
 
-async function persistOutcome({ orders, payments, paymentId, orderId, customerId, status, reference }) {
-  const transition = await orders.recordPaymentStatus({
-    orderId,
-    customerId,
-    paymentId,
-    paymentStatus: status,
-    paymentUpdate: connection => payments.updateStatus(paymentId, status, reference, connection),
-  });
-  if (transition?.paymentAttempt) return transition.paymentAttempt;
-  // Adapters predating the shared transaction callback still get the same status update.
-  return payments.updateStatus(paymentId, status, reference);
+function resetHash(secret, challengeId, userId, otp) {
+  return createHmac('sha256', secret).update(`${challengeId}:${userId}:${otp}`).digest('hex');
 }
 
-export function createPaymentService({ orders, payments, provider }) {
+export function createPaymentService({ orders, payments, otpChallenges, emailService, orderConfirmationEmails, secret, logger = console }) {
+  const pepper = secret || randomBytes(32).toString('hex');
+
   return {
-    async process({ orderId, customerId, idempotencyKey }) {
-      const existing = await payments.findByIdempotencyKey(idempotencyKey);
-      if (existing) {
-        if (String(existing.orderId) !== String(orderId) || String(existing.customerId) !== String(customerId)) throw new HttpError(409, 'IDEMPOTENCY_KEY_REUSED', 'This request key belongs to a different payment.');
-        return { attempt: existing, reused: true };
+    async requestOtp({ user, paymentMethod }) {
+      if (!METHODS.has(paymentMethod)) throw new HttpError(400, 'INVALID_PAYMENT_METHOD', 'Choose UPI, card, or net banking to continue.');
+      if (!user?.id || !user?.email) throw new HttpError(401, 'AUTHENTICATION_REQUIRED', 'Sign in to verify your payment by email.');
+      if (!emailService?.configured || !otpChallenges?.create) {
+        throw new HttpError(503, 'PAYMENT_OTP_UNAVAILABLE', 'Email verification is unavailable. Configure Gmail SMTP to continue.');
       }
+      await orders.validatePaymentCheckout(user.id);
 
-      const order = await orders.getPayableOrder(orderId, customerId);
-      if (!order || String(order.customerId) !== String(customerId)) throw new HttpError(404, 'ORDER_NOT_FOUND', 'The order could not be found for this customer.');
-      if (!Number.isFinite(Number(order.amount)) || Number(order.amount) <= 0) throw new HttpError(409, 'INVALID_ORDER_AMOUNT', 'This order cannot be paid with its current amount.');
-      if (!['pending', 'payment_due', 'payment_failed'].includes(order.status)) throw new HttpError(409, 'ORDER_NOT_PAYABLE', 'This order is not awaiting payment.');
+      const id = randomUUID();
+      const otp = String(randomInt(100000, 1000000));
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      const saved = await otpChallenges.create({
+        id, userId: user.id, paymentMethod,
+        otpHash: resetHash(pepper, id, user.id, otp), expiresAt,
+      });
+      if (saved.cooldown) throw new HttpError(429, 'PAYMENT_OTP_COOLDOWN', 'Wait before requesting another payment code.');
 
-      // The repository must enforce a unique key atomically across processes.
-      let attempt;
       try {
-        attempt = await payments.createPending({ idempotencyKey, orderId, customerId, amount: Number(order.amount), currency: order.currency || 'INR' });
+        await emailService.sendPaymentOtp({ to: user.email, otp, paymentMethod });
       } catch (error) {
-        if (!['ER_DUP_ENTRY', 'DUPLICATE_IDEMPOTENCY_KEY', 'IDEMPOTENCY_CONFLICT'].includes(error.code)) throw error;
-        const concurrent = await payments.findByIdempotencyKey(idempotencyKey);
-        if (!concurrent || String(concurrent.orderId) !== String(orderId) || String(concurrent.customerId) !== String(customerId)) throw new HttpError(409, 'IDEMPOTENCY_KEY_REUSED', 'This request key belongs to a different payment.');
-        return { attempt: concurrent, reused: true };
+        logSmtpFailure(logger, error);
+        await otpChallenges.invalidate?.(id, user.id);
+        throw new HttpError(503, 'PAYMENT_OTP_DELIVERY_FAILED', 'We could not deliver the payment code. Check the email setup and try again.');
       }
-      let result;
-      try {
-        result = await provider.process({ paymentId: attempt.id, orderId, amount: Number(order.amount), currency: order.currency || 'INR' });
-      } catch (error) {
-        result = { status: error.code === 'PAYMENT_TIMEOUT' ? 'timed_out' : 'failed', providerReference: null };
-      }
-      if (!validStatuses.has(result.status)) throw new HttpError(502, 'INVALID_PROVIDER_RESULT', 'The payment provider returned an invalid result.');
-      const updated = await persistOutcome({ orders, payments, paymentId: attempt.id, orderId, customerId, status: result.status, reference: result.providerReference ?? null });
-      return { attempt: updated, reused: false };
+      return { challengeId: id, expiresAt, resendAt: saved.resendAt };
     },
 
-    async getStatus(paymentId, customerId) {
-      const attempt = await payments.findById(paymentId);
-      if (!attempt || String(attempt.customerId) !== String(customerId)) throw new HttpError(404, 'PAYMENT_NOT_FOUND', 'The payment could not be found.');
-      return attempt;
+    async verifyOtp({ userId, challengeId, otp }) {
+      if (typeof challengeId !== 'string' || !/^[0-9a-f-]{36}$/i.test(challengeId) || typeof otp !== 'string' || !/^\d{6}$/.test(otp)) {
+        throw new HttpError(400, 'INVALID_PAYMENT_OTP_INPUT', 'Enter the six-digit code from your Folio payment email.');
+      }
+      if (!orders?.createAfterPaymentOtp || !payments?.recordSimulatedSuccess || !otpChallenges?.verify) {
+        throw new HttpError(503, 'PAYMENT_OTP_UNAVAILABLE', 'Order verification is not available right now. Please try again later.');
+      }
+
+      const result = await orders.createAfterPaymentOtp({
+        userId,
+        challengeId,
+        verifyChallenge: connection => otpChallenges.verify({
+          id: challengeId,
+          userId,
+          otpHash: resetHash(pepper, challengeId, userId, otp),
+          connection,
+        }),
+        recordPayment: (connection, payment) => payments.recordSimulatedSuccess(payment, connection),
+      });
+
+      if (result.verification && !result.verification.ok) {
+        const { reason } = result.verification;
+        if (reason === 'expired') throw new HttpError(410, 'PAYMENT_OTP_EXPIRED', 'This payment code has expired. Request a new code.');
+        if (reason === 'used') throw new HttpError(409, 'PAYMENT_OTP_ALREADY_USED', 'This payment code has already been used.');
+        if (reason === 'attempts_exceeded') throw new HttpError(429, 'PAYMENT_OTP_ATTEMPTS_EXCEEDED', 'Too many incorrect codes. Request a new payment code.');
+        throw new HttpError(400, 'PAYMENT_OTP_INCORRECT', 'That code is incorrect. Check the email and try again.');
+      }
+      // createAfterPaymentOtp resolves only after its MySQL transaction commits.
+      // Delivery failures are logged and queued for retry without changing the paid order result.
+      if (result.order) {
+        logger?.info?.('[email] Order confirmation dispatcher reached after committed order', {
+          orderId: result.order.id, configured: Boolean(orderConfirmationEmails),
+        });
+        if (!orderConfirmationEmails) {
+          logger?.error?.('[email] Order confirmation dispatcher is unavailable', {
+            category: 'ORDER_CONFIRMATION_NOT_CONFIGURED', orderId: result.order.id,
+          });
+        } else {
+          try { await orderConfirmationEmails.sendForOrder(result.order); }
+          catch (error) { logSmtpFailure(logger, error, 'order_confirmation_dispatcher'); }
+        }
+      }
+      return { order: result.order, reused: Boolean(result.reused) };
     },
 
-    async cancel(paymentId, customerId) {
-      const attempt = await payments.findById(paymentId);
-      if (!attempt || String(attempt.customerId) !== String(customerId)) throw new HttpError(404, 'PAYMENT_NOT_FOUND', 'The payment could not be found.');
-      if (attempt.status !== 'pending') return attempt;
-      const result = provider.cancel ? await provider.cancel({ paymentId: attempt.id }) : { status: 'cancelled' };
-      if (!validStatuses.has(result.status)) throw new HttpError(502, 'INVALID_PROVIDER_RESULT', 'The payment provider returned an invalid result.');
-      const updated = await persistOutcome({ orders, payments, paymentId: attempt.id, orderId: attempt.orderId, customerId, status: result.status, reference: result.providerReference ?? null });
-      return updated;
+    async retryOrderConfirmation({ userId, orderId }) {
+      if (!orderConfirmationEmails) throw new HttpError(503, 'ORDER_CONFIRMATION_UNAVAILABLE', 'Order confirmation email retry is unavailable.');
+      return orderConfirmationEmails.retryForCustomer({ userId, orderId });
     },
   };
 }

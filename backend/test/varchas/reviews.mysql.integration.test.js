@@ -28,6 +28,7 @@ test('MySQL review flow persists local customer and demo reviews and enforces ow
   app.use('/api/books', createReviewsRouter({
     pool,
     env: { NODE_ENV: 'development' },
+    showPreviewReviews: true,
     requireAuth: (request, _response, next) => {
       request.user = { id: request.get('x-test-user') || ownerId };
       request.session = { userId: request.user.id };
@@ -61,9 +62,10 @@ test('MySQL review flow persists local customer and demo reviews and enforces ow
 
   const listed = await fetch(base);
   const payload = await listed.json();
-  assert.equal(payload.summary.count, 1);
-  assert.ok(payload.summary.average === 4); // duplicate submission updates the customer's single review.
-  assert.ok(payload.summary.demoCount >= 8 && payload.summary.demoCount <= 12);
+  assert.equal(payload.summary.customerCount, 1);
+  assert.equal(payload.summary.customerAverage, 4); // duplicate submission updates the customer's single review.
+  assert.ok(payload.summary.count >= 31 && payload.summary.count <= 41);
+  assert.ok(payload.summary.demoCount >= 30 && payload.summary.demoCount <= 40);
   assert.ok(payload.summary.demoAverage >= 1 && payload.summary.demoAverage <= 5);
   assert.ok(payload.reviews.every(item => !item.isDemo || /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(item.author)));
   await fetch(base);
@@ -71,7 +73,7 @@ test('MySQL review flow persists local customer and demo reviews and enforces ow
   assert.equal(Number(demoRows[0].count), payload.summary.demoCount);
   const workResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/books/works%2FOL25796244W/reviews`);
   const workCount = (await workResponse.json()).summary.demoCount;
-  assert.ok(workCount >= 8 && workCount <= 12);
+  assert.ok(workCount >= 30 && workCount <= 40);
   await fetch(`http://127.0.0.1:${server.address().port}/api/books/works%2FOL25796244W/reviews`);
   const [workRows] = await pool.query("SELECT COUNT(*) AS count FROM book_reviews WHERE book_id = 'works/OL25796244W' AND is_demo = 1");
   assert.equal(Number(workRows[0].count), workCount);

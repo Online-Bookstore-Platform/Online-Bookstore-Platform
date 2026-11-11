@@ -58,16 +58,16 @@ describe('order-draft hand-off', () => {
   });
   const answer = (status, body) => async () => ({ status, ok: status < 300, json: async () => body });
 
-  it('returns the order the order service created and builds the payment link from its id', async () => {
+  it('creates a COD order and builds the OTP payment page link from the selected method', async () => {
     let sent;
     globalThis.fetch = async (path, options) => ((sent = { path, options }), answer(201, { order: { id: 42, orderNumber: 'ORD-000042' } })());
-    const order = await createOrderDraft({ city: 'Pune' });
+    const order = await createOrderDraft({ city: 'Pune' }, 'cod');
     assert.equal(sent.path, '/api/orders');
-    assert.deepEqual(JSON.parse(sent.options.body), { delivery: { city: 'Pune' } });
+    assert.deepEqual(JSON.parse(sent.options.body), { delivery: { city: 'Pune' }, paymentMethod: 'cod' });
     assert.ok(sent.options.headers['Idempotency-Key']);
     assert.equal(globalThis.sessionStorage.getItem(storageKey), null);
-    assert.equal(paymentPath(order), '/payment?orderId=42');
-    assert.equal(paymentPath({ id: 'a b' }), '/payment?orderId=a%20b');
+    assert.equal(paymentPath('upi'), '/payment?method=upi');
+    assert.equal(paymentPath('netbanking'), '/payment?method=netbanking');
   });
 
   it('reports a missing order service honestly instead of pretending an order exists', async () => {

@@ -35,18 +35,29 @@ describe('database schema (#13)', databaseTests, () => {
       'cart_items',
       'carts',
       'categories',
+      'contact_submissions',
       'delivery_details',
       'inventory',
       'inventory_adjustments',
+      'order_confirmation_email_deliveries',
       'order_items',
       'order_status_history',
       'orders',
       'password_reset_tokens',
+      'payment_otp_challenges',
       'payments',
       'presentation_products',
+      'schema_migrations',
       'sessions',
       'users',
     ]);
+    const [orders] = await db.query('SHOW COLUMNS FROM orders');
+    const orderColumns = new Set(orders.map(column => column.Field));
+    for (const column of ['payment_method', 'payment_status', 'stock_reserved']) assert.ok(orderColumns.has(column), `orders has ${column}`);
+    const [resetColumns] = await db.query('SHOW COLUMNS FROM password_reset_tokens');
+    assert.ok(resetColumns.some(column => column.Field === 'otp_attempts'));
+      const [migrations] = await db.query("SELECT migration_name FROM schema_migrations WHERE migration_name IN ('20261030_order_lifecycle_and_reset_otp.sql', '20261031_create_payment_otp_challenges.sql')");
+      assert.equal(migrations.length, 2, 'fresh schema records the lifecycle and payment OTP migration baseline');
   });
 
   describe('book reviews', () => {
@@ -415,9 +426,32 @@ describe('database setup script (#13)', databaseTests, () => {
     await connection.end();
   });
 
-  it('applies the schema once and then does nothing', async () => {
+  it('applies the fresh schema, then upgrades an older schema without losing rows', async () => {
     assert.deepEqual(await setupDatabase({ config }), { schemaApplied: true, seeded: false });
     assert.deepEqual(await setupDatabase({ config }), { schemaApplied: false, seeded: false });
+    const mysql = (await import('mysql2/promise')).default;
+    const connection = await mysql.createConnection(config);
+    try {
+      const [user] = await connection.query("INSERT INTO users (name, email, password_hash, terms_accepted_at) VALUES ('Migration Reader', 'migration-reader@example.com', 'hash', UTC_TIMESTAMP())");
+      await connection.query(`ALTER TABLE orders
+        MODIFY status ENUM('pending', 'pending_collection', 'payment_failed', 'paid', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled') NOT NULL DEFAULT 'pending',
+        MODIFY payment_status ENUM('pending', 'pending_collection', 'succeeded', 'failed') NOT NULL DEFAULT 'pending',
+        DROP COLUMN stock_reserved`);
+      await connection.query('ALTER TABLE password_reset_tokens DROP COLUMN otp_attempts');
+      await connection.query('DROP TABLE payment_otp_challenges');
+      await connection.query('ALTER TABLE books MODIFY isbn VARCHAR(13) NOT NULL');
+      assert.deepEqual(await setupDatabase({ config }), { schemaApplied: false, seeded: false });
+      const [[savedUser]] = await connection.query('SELECT id FROM users WHERE id = ?', [user.insertId]);
+      assert.equal(savedUser.id, user.insertId, 'existing customer data survives migration');
+      const [orders] = await connection.query('SHOW COLUMNS FROM orders');
+      assert.ok(orders.some(column => column.Field === 'stock_reserved'));
+      const [tokens] = await connection.query('SHOW COLUMNS FROM password_reset_tokens');
+      assert.ok(tokens.some(column => column.Field === 'otp_attempts'));
+      const [paymentOtp] = await connection.query('SHOW COLUMNS FROM payment_otp_challenges');
+      assert.ok(paymentOtp.some(column => column.Field === 'otp_hash'));
+      const [[isbn]] = await connection.query("SHOW COLUMNS FROM books LIKE 'isbn'");
+      assert.equal(isbn.Null, 'YES');
+    } finally { await connection.end(); }
   });
 
   it('refuses to load sample data into a database that already has tables', async () => {

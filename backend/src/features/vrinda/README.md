@@ -23,9 +23,9 @@ const paymentRepositories = {
 
 Registration hashes passwords with Varchas's `hashPassword` helper and writes the shared `users` table. It does not create a separate login/session system; newly registered customers sign in through `/api/auth/login`. Profile, cart, and order routes use the injected Varchas session middleware and always scope reads/writes to `request.user.id`.
 
-Varchas's payment repository should use `createVrindaOrderService` for `orders.getPayableOrder(orderId, customerId)` and `orders.recordPaymentStatus({ orderId, customerId, paymentId, paymentStatus })`. A confirmed payment is recorded with an atomic order/status-history transaction and Uditi's `deductStock`; failed, cancelled, or timed-out attempts transition a payable order to `payment_failed`. A stock shortage after provider approval is thrown to the payment integration for its refund/reconciliation policy; this feature does not pretend the order was paid or implement a payment provider.
+Varchas's simulated-payment flow calls `createVrindaOrderService` after a Gmail OTP is verified. The order service rechecks the cart and stock and atomically creates the order, deducts inventory, writes the simulated-success record, confirms fulfillment, and clears the cart. Failed or expired OTP attempts do not create an order.
 
-Order drafting checks stock with Uditi's `checkAvailability` but does not reserve or deduct inventory. Prices and book titles are read from the database and snapshotted into `order_items`; payment confirmation is the point where Uditi's inventory service deducts the stock. Customer-facing tracking is read-only: customers cannot set payment, shipping, delivery, or cancellation states.
+Online order drafting checks stock with Uditi's `checkAvailability` but does not reserve inventory. Prices and book titles are read from the database and snapshotted into `order_items`; the payment attempt reserves stock before opening hosted checkout. COD deducts and reserves stock when placed. Customer tracking reads persisted history; customers may cancel eligible unshipped orders and request a return after delivery. Administrators manage legal fulfillment transitions through `/api/admin/orders`.
 
 ## Endpoints
 

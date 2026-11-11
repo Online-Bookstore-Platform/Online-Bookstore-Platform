@@ -12,7 +12,7 @@ async function main() {
       console.log(`Cleared ${await clearDemoReviews(connection)} demo reviews.`);
       return;
     }
-    const [books] = await connection.query('SELECT id FROM books WHERE is_active = 1 ORDER BY id');
+    const [books] = await connection.query('SELECT id FROM books ORDER BY id');
     const [works] = await connection.query("SELECT DISTINCT book_id FROM book_reviews WHERE is_demo = 0 AND book_id LIKE 'works/OL%W'");
     const targets = new Map([
       ...books.map(book => [`local:${book.id}`, { key: `local:${book.id}`, localId: book.id }]),
@@ -20,7 +20,7 @@ async function main() {
       ...workArgs.map(key => [key, { key, localId: null }]),
     ]);
     for (const target of targets.values()) await ensureDemoReviews(connection, target);
-    console.log(`Ensured 8–12 deterministic preview reviews for ${targets.size} local and discovery books.`);
+    console.log(`Ensured 30-40 deterministic editorial samples for ${books.length} local catalogue books and ${targets.size - books.length} discovery books.`);
     console.log('Use --work works/OL123W to initialize a discovery book without contacting a provider.');
   } finally {
     await connection.end();

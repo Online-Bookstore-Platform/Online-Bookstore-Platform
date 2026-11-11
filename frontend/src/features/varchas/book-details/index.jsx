@@ -11,7 +11,8 @@ const hasReviews = value => /^(?:[1-9]\d{0,17}|works\/OL\d+W)$/.test(value || ''
 export default function BookDetailsPage() {
   const { bookId } = useParams();
   const [state, setState] = useState({ status: 'loading', book: null, message: '' });
-  const [reviews, setReviews] = useState({ status: 'loading', items: [], count: 0, average: null, demoCount: 0, demoAverage: null, message: '' });
+  const [reviews, setReviews] = useState({ status: 'loading', items: [], count: 0, average: null, message: '' });
+  const [reviewsVisible, setReviewsVisible] = useState(8);
   const [review, setReview] = useState({ rating: 5, content: '' });
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewNotice, setReviewNotice] = useState('');
@@ -42,10 +43,10 @@ export default function BookDetailsPage() {
   async function loadReviews() {
     try {
       const response = await apiRequest(`/api/books/${encodeURIComponent(bookId)}/reviews`);
-      setReviews({ status: 'ready', items: response.reviews || [], count: response.summary.count, average: response.summary.average, demoCount: response.summary.demoCount || 0, demoAverage: response.summary.demoAverage, message: '' });
+      setReviews({ status: 'ready', items: response.reviews || [], count: response.summary.count, average: response.summary.average, message: '' });
     } catch (error) { setReviews(current => ({ ...current, status: 'error', message: error.message })); }
   }
-  useEffect(() => { if (hasReviews(bookId)) { setReviews(current => ({ ...current, status: 'loading', message: '' })); loadReviews(); } }, [bookId]);
+  useEffect(() => { setReviewsVisible(8); if (hasReviews(bookId)) { setReviews(current => ({ ...current, status: 'loading', message: '' })); loadReviews(); } }, [bookId]);
   useEffect(() => {
     let active = true;
     getCurrentUser().then(({ user }) => { if (active) setViewer({ status: 'ready', user }); })
@@ -60,7 +61,7 @@ export default function BookDetailsPage() {
     try {
       const saved = await apiRequest(`/api/books/${encodeURIComponent(bookId)}/reviews${editingReview ? `/${editingReview}` : ''}`, { method: editingReview ? 'PATCH' : 'POST', body: JSON.stringify({ rating: Number(review.rating), content: review.content }) });
       if (saved?.review) setReviews(current => {
-        const row = { ...saved.review, isDemo: false, mine: true };
+        const row = { ...saved.review, mine: true };
         const previous = current.items.find(item => String(item.id) === String(row.id));
         const count = current.count + (previous ? 0 : 1);
         const average = current.average == null ? Number(row.rating) : (current.average * current.count + Number(row.rating) - (previous?.rating || 0)) / Math.max(count, 1);
@@ -124,25 +125,26 @@ export default function BookDetailsPage() {
   </div>
     {hasReviews(bookId) && <section className={styles.reviews} aria-labelledby="reviews-title">
       <p className="eyebrow">Reader notes</p><h2 id="reviews-title">Reviews</h2>
-      {reviews.status === 'ready' && reviews.demoCount > 0 && <p className={styles.sampleNotice}>Sample reviews shown for preview. Customer ratings and counts exclude them.</p>}
       {reviews.status === 'loading' && <p aria-live="polite">Loading reviews…</p>}
       {reviews.status === 'error' && <p role="alert">{reviews.message}</p>}
       {reviews.status === 'ready' && <>
-        <p className={styles.availability}>{reviews.count ? `Customer reviews: ${reviews.average.toFixed(1)} out of 5 · ${reviews.count} ${reviews.count === 1 ? 'review' : 'reviews'}` : 'No customer reviews yet. Be the first to review this book.'}</p>
-        {reviews.items.map(item => {
+        <p className={styles.availability}>{reviews.count ? `Reader rating: ${reviews.average.toFixed(1)} out of 5 · ${reviews.count} ${reviews.count === 1 ? 'review' : 'reviews'}` : 'No reviews yet. Be the first to review this book.'}</p>
+        {reviews.items.some(item => item.isDemo) && <p className={styles.sampleNote}>Editorial sample reviews for classroom presentation. These are fictional examples, not customer feedback.</p>}
+        {reviews.items.slice(0, reviewsVisible).map(item => {
           const author = item.author || 'Reader';
           const submitted = new Date(item.createdAt);
           const dateLabel = Number.isNaN(submitted.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(submitted);
           return <article className={styles.review} key={item.id}>
-            <div className={styles.reviewAvatar} aria-hidden="true">{author.trim().charAt(0).toLocaleUpperCase() || 'R'}</div>
+            <div className={styles.reviewAvatar} data-tone={String((author.charCodeAt(0) || 0) % 5)} aria-hidden="true">{author.trim().charAt(0).toLocaleUpperCase() || 'R'}</div>
             <div className={styles.reviewBody}>
-              <div className={styles.reviewHeading}><h3>{author}</h3></div>
+              <div className={styles.reviewHeading}><h3>{author}</h3>{item.isDemo && <span className={styles.sampleBadge}>Editorial sample</span>}</div>
               <p className={styles.reviewMeta}><span className={styles.stars} aria-label={`${item.rating} out of 5 stars`}>{'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}</span><span>{item.rating} out of 5</span><time dateTime={Number.isNaN(submitted.getTime()) ? undefined : submitted.toISOString()}>{dateLabel}</time></p>
               <p className={styles.reviewText}>{item.content}</p>
               {item.mine && <div className={styles.reviewActions}><button type="button" onClick={() => { setEditingReview(item.id); setReview({ rating: Number(item.rating), content: item.content }); }}>Edit your review</button><button type="button" onClick={() => deleteReview(item.id)}>Delete your review</button></div>}
             </div>
           </article>;
         })}
+        {reviewsVisible < reviews.items.length && <button className={styles.loadReviews} type="button" onClick={() => setReviewsVisible(value => value + 8)}>Load more reviews</button>}
       </>}
       {viewer.status === 'guest' ? <p className={styles.availability}>Sign in to leave or manage your review. <Link to={`/login?next=${encodeURIComponent(`/books/${encodeURIComponent(bookId)}`)}`}>Sign in to review</Link></p> : viewer.status === 'loading' ? <p aria-live="polite">Checking sign-in status...</p> : viewer.status === 'error' ? <p className={styles.error} role="alert">We could not check your sign-in status. Reload this page to try again.</p> : <form className={styles.reviewForm} onSubmit={submitReview}>
         <span id="review-rating-label">Your rating</span><div className={styles.rating} role="radiogroup" aria-labelledby="review-rating-label">{[1,2,3,4,5].map(value => <button key={value} type="button" role="radio" aria-checked={review.rating === value} aria-label={`${value} star${value === 1 ? '' : 's'}`} tabIndex={review.rating === value ? 0 : -1} className={review.rating >= value ? styles.starSelected : styles.star} onClick={() => setReview(current => ({ ...current, rating: value }))} onKeyDown={event => { if (['ArrowRight','ArrowUp','ArrowLeft','ArrowDown'].includes(event.key)) { event.preventDefault(); const delta = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : -1; const next = Math.min(5, Math.max(1, review.rating + delta)); setReview(current => ({ ...current, rating: next })); event.currentTarget.parentElement.querySelectorAll('[role=radio]')[next - 1]?.focus(); } }}>★</button>)}</div><span className={styles.ratingScore}>{review.rating} out of 5</span>

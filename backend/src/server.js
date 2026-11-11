@@ -6,6 +6,7 @@ import { createMySqlSessionStore } from './features/varchas/mysql-session-store.
 import { createMySqlBooksRepository } from './features/varchas/book-details/mysql-books.repository.js';
 import { createMySqlPaymentsRepository } from './features/varchas/payments/mysql-payments.repository.js';
 import { createMySqlPasswordResetRepository } from './features/varchas/authentication/mysql-password-reset.repository.js';
+import { createMySqlPaymentOtpRepository } from './features/varchas/payments/mysql-payment-otp.repository.js';
 import { createVrindaOrderService } from './features/vrinda/orders/orders.service.js';
 
 async function loadAdapters() {
@@ -37,6 +38,7 @@ const databasePasswordReset = pool ? createMySqlPasswordResetRepository(pool) : 
 const repositories = {
   ...(adapters?.repositories || {}),
   users: pool ? { ...databaseUsers, ...databasePasswordReset, ...(adapters?.repositories?.users || {}) } : adapters?.repositories?.users,
+  paymentOtpChallenges: adapters?.repositories?.paymentOtpChallenges || (pool ? createMySqlPaymentOtpRepository(pool) : undefined),
   books: adapters?.repositories?.books || (pool ? createMySqlBooksRepository(pool) : undefined),
   payments: adapters?.repositories?.payments || (pool ? createMySqlPaymentsRepository(pool) : undefined),
   orders: adapters?.repositories?.orders || (pool ? createVrindaOrderService({ pool }) : undefined),
