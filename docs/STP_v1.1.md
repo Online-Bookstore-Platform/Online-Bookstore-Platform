@@ -8,7 +8,7 @@ Online Bookstore — Version 1.1
 | Authors | Varchas – PES2UG24CS575, Uditi Mourya – PES2UG24CS565, Vrinda Venugopal M – PES2UG24CS601 |
 | Date | 11-11-2026 |
 | Status | Revised (v1.1) |
-| Reference Documents | Online Bookstore SRS v1.0 (08-09-2026), Online Bookstore SAD v1.1 (12-09-2026), Deviations document (docs/DEVIATIONS.md) |
+| Reference Documents | Online Bookstore SRS v1.0 with Revision 1.1 addendum, Online Bookstore SAD v1.2 (11-11-2026), Deviations document (docs/DEVIATIONS.md) |
 
 ## Revision History
 

@@ -1,14 +1,16 @@
 # Final Build Verification and Development Freeze (Issue #28)
 
-Original baseline verified on 29 October 2026. The current workspace was re-verified on 31 October 2026;
-see [`TEST_EXECUTION_REPORT.md`](TEST_EXECUTION_REPORT.md) for the current database, OTP, payment, and order-lifecycle results.
+Original baseline verified on 29 October 2026. Development was reopened for Sprint 3 (order lifecycle,
+cancellation, administrator order management, OTP flows and contact form, committed 11 November 2026).
+The build was re-verified on 12 November 2026 at `main` @ `75354b2`; see
+[`TEST_EXECUTION_REPORT.md`](TEST_EXECUTION_REPORT.md) for the results.
 
 ## Checklist
 
 | Item | Result |
 |---|---|
 | Feature pull requests from all three members reviewed and merged into `main` (#20 Uditi, #31 Varchas, #21 Vrinda) | Done |
-| Backend: `cd backend && npm test`: 312 tests, 310 pass, 0 fail, 2 known cases tracked as `todo` | Pass (31 Oct 2026) |
+| Backend: `cd backend && npm test`: 325 tests, 325 pass, 0 fail, 0 `todo` (Node and MySQL in UTC; see DEF-11) | Pass (12 Nov 2026) |
 | Frontend: `node --test "src/**/*.test.js"`: 85 / 85 | Pass |
 | Frontend production build: `npm run build` | Pass |
 | Application runs end to end (`npm run dev` in `backend/` and `frontend/`, MySQL 8 schema + seed): sign in, browse, search, cart, checkout, payment, order history, tracking, admin catalogue, inventory | Pass (recorded in the demo) |
@@ -20,10 +22,10 @@ see [`TEST_EXECUTION_REPORT.md`](TEST_EXECUTION_REPORT.md) for the current datab
 
 ## Remaining follow-up items
 
-They are documented, not fixed, because the build is frozen (no new features). See the defect log in `docs/TEST_EXECUTION_REPORT.md`.
+They are documented, not fixed. See the defect log in `docs/TEST_EXECUTION_REPORT.md`.
 
-* DEF-04: cart stock errors could explain the remaining available quantity more clearly.
-* DEF-06: concurrent discovery calls may queue during an Open Library outage.
+* DEF-06: concurrent discovery calls queue during an Open Library outage (outage case not automated).
+* DEF-11: payment-OTP resend cooldown is skipped when Node and MySQL run in different time zones.
 * DEF-09 and DEF-10: deployment headers and a frontend test script remain follow-up items.
 
 Customer order cancellation, administrator order management, duplicate ISBN handling, and already-paid checkout responses are implemented and pass the current system tests.
