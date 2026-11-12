@@ -17,7 +17,7 @@ Branch (decision) coverage is reported separately in [`BRANCH_COVERAGE_REPORT.md
 * **Line coverage**: the share of executable source lines that ran at least once during the tests.
 * **Function coverage**: the share of functions that were called at least once.
 * Coverage was collected from the **complete** test runs: backend unit, integration and STP system
-  tests against MySQL (322 tests), and frontend tests (85 tests).
+  tests against MySQL (322 tests at the time of measurement; the suite has since grown to 325), and frontend tests (85 tests).
 * Test files themselves are excluded from the numbers.
 * **Important limitation:** Node's coverage only measures source files that the tests load. A file
   that no test imports does not appear in the totals at all. Those files are listed separately in

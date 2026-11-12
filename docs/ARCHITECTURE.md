@@ -1,9 +1,45 @@
 # Architecture
 
-The repository is a client/server application aligned with the supplied project documents: React in the browser, an Express HTTP application, and MySQL planned for persistence. Varchas's feature API modules use injected repositories/services; the repository has not yet supplied a MySQL adapter, schema, persistent session store, or Vrinda order/cart services.
+Folio is a three-tier client/server application, as described in the SAD (layered architecture): a React single-page application in the browser, an Express REST API, and a MySQL 8 database. The backend also calls two external book-discovery services (Open Library, with Google Books as fallback) and Gmail SMTP for one-time codes and order emails.
 
-The Vite frontend owns shared layout, route composition, design tokens, and the static homepage. Each owner has a separate feature folder; route declarations remain integration-owned. The shared layout wraps every route in one navigation and footer. Unknown paths render a not-found page.
+```
+Browser (React + Vite)  --HTTP/JSON-->  Express API (Node.js)  --SQL-->  MySQL 8
+                                              |--HTTPS--> Open Library / Google Books
+                                              |--SMTP---> Gmail (OTP and order emails)
+```
 
-The backend separates Express application configuration (`src/app.js`) from process startup (`src/server.js`). It exposes `GET /api/health` and Varchas authentication, book detail, administrator catalogue, and payment routes. Without a configured adapter, data-dependent routes fail with HTTP 503 instead of writing to ephemeral in-memory stores. The feature adapter contract is documented in `backend/src/features/varchas/README.md`. No MySQL schema or credentials are included.
+## Frontend
 
-The UI is a responsive, bookstore-specific interpretation of editorial product presentation: neutral colors, large type, generous spacing, CSS-created sample book covers, accessible landmarks, visible focus, and reduced-motion support. No external image or font service is required.
+The Vite frontend owns shared layout, route composition (`src/app/router.jsx`), design tokens and the static pages. Each team member has a feature folder under `src/features/<owner>/`; route declarations, shared components and global styles are integration-owned. The shared layout wraps every route in one navigation bar and footer, with category-specific backgrounds and light/dark themes. Unknown paths render a not-found page. Locally, Vite proxies `/api` to the backend, so the browser and API share one origin.
+
+## Backend
+
+The backend separates application wiring (`src/app.js`, `createApp`) from process startup (`src/server.js`), so the system tests can boot the exact production wiring on a throw-away database.
+
+`createApp` mounts, in order:
+
+| Mount | Owner | Responsibility |
+|---|---|---|
+| `GET /api/health` | Integration | Liveness check |
+| `/api/catalogue` | Uditi | Live discovery (Open Library → Google Books → store fallback), search, filters, ratings |
+| `/api/contact` | Varchas | Contact-form submissions |
+| `/api` (Varchas router) | Varchas | Authentication and sessions, password reset by OTP, book details, administrator catalogue, payments with simulated OTP |
+| `/api/books/:id/reviews` | Varchas | Customer reviews |
+| `/api` (Vrinda router) | Vrinda | Registration/profile, cart, orders, cancellation, tracking, administrator order management |
+| `/api` (Uditi router) | Uditi | Checkout summary and delivery details, inventory and stock administration |
+
+Every feature follows the same layering: `*.validation.js` (input checking) → `*.repository.js` (parameterized SQL) → `*.service.js` (business rules) → `*.routes.js` (HTTP). Routes fail closed: if the database or an auth dependency is not configured they answer HTTP 503 instead of using in-memory data. All errors use one shape, `{ "error": { "code", "message", "details"? } }`, and internal errors never reach the client.
+
+`server.js` creates the MySQL pool from the `DB_*` variables, a MySQL-backed session store, and MySQL repositories for users, books, payments, payment OTPs and orders. An optional `VARCHAS_ADAPTER_MODULE` can replace those repositories.
+
+## Data
+
+The schema is `backend/database/schema.sql`, with additive changes in `backend/database/migrations/` (see their READMEs). Integrity rules live in the database as well as in code: foreign keys between users, books, carts, orders, order items and payments; `CHECK (quantity >= 0)` on inventory; price and title snapshots in `order_items`; an audit trail in `inventory_adjustments` and `order_status_history`. Multi-row changes such as payment, stock deduction and order status run in one transaction (`features/uditi/shared/transaction.js`), which retries MySQL deadlock victims.
+
+## Security
+
+Passwords are hashed with bcrypt; sessions are server-side with HttpOnly, SameSite=Strict cookies (Secure in production); administrator routes check the role; login, registration and catalogue are rate-limited; no card data is accepted or stored. HTTPS/TLS and security headers are left to the deployment's reverse proxy (DEF-09).
+
+## UI
+
+The UI is responsive and accessible: semantic landmarks, visible focus states, labelled form controls, reduced-motion support and light/dark themes.

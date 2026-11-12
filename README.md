@@ -348,10 +348,17 @@ The backend uses environment variables for database connectivity, session manage
 | `DB_NAME` | Database name |
 | `DB_USER` | Database username |
 | `DB_PASSWORD` | Database password |
-| `DEV_PASSWORD_RESET_LINK` | Development password-reset link configuration |
-| `VARCHAS_ADAPTER_MODULE` | Optional backend adapter module |
-| `PAYMENT_PROVIDER` | Payment provider configuration, where supported |
-| `FOLIO_CHECKOUT_OUTCOME` | Simulated checkout outcome configuration, where enabled |
+| `DB_POOL_SIZE` | Optional MySQL connection-pool size (default 10) |
+| `EMAIL_FROM` | Sender address for OTP and order emails |
+| `GMAIL_USER` | Gmail account used for SMTP |
+| `GMAIL_APP_PASSWORD` | Google App Password for that account (never the account password) |
+| `VARCHAS_ADAPTER_MODULE` | Optional module that replaces the built-in MySQL repositories |
+| `OPEN_LIBRARY_USER_AGENT` | Client identification sent to Open Library (include a contact in deployment) |
+| `GOOGLE_BOOKS_API_KEY` | Enables the Google Books fallback when Open Library is unavailable |
+| `CATALOGUE_DEMO_MODE` | Local presentation store; must stay `false` in production |
+| `CATALOGUE_DEMO_PRICE_MIN` / `CATALOGUE_DEMO_PRICE_MAX` | Price range for demo-store products |
+| `CATALOGUE_DEMO_INITIAL_STOCK` | Initial stock for demo-store products |
+| `SEED_DEMO_PASSWORD` | Local demos only: password for the seeded demo accounts |
 
 The authoritative environment configuration is maintained in `backend/.env.example` and the backend configuration code.
 
@@ -361,8 +368,8 @@ The authoritative environment configuration is maintained in `backend/.env.examp
 - Keep `.env.example` restricted to safe placeholder values.
 - Use strong session secrets.
 - Do not expose database credentials in frontend code.
-- Disable development-only password-reset functionality in production.
-- Do not use simulated payment configuration as a replacement for a production payment gateway.
+- Never set `SEED_DEMO_PASSWORD` or enable `CATALOGUE_DEMO_MODE` on a real deployment.
+- The payment OTP flow is simulated and is not a replacement for a production payment gateway.
 
 ## Database Setup
 

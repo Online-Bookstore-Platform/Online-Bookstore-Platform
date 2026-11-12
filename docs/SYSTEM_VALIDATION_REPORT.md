@@ -39,7 +39,8 @@ part of the requirement could be shown. **Not run** = could not be executed in t
 | Not run | 7 |
 | Fail | **0** |
 
-Automated STP system suite: **45 tests — 44 pass, 0 fail, 1 known defect (DEF-06, recorded as `todo`).**
+Automated STP system suite (re-run 12 November 2026): **47 tests — 47 pass, 0 fail, 0 `todo`.** DEF-06 is
+still open, but its test now covers only concurrent local searches, not the provider outage (see §6).
 
 **Overall result: all functional requirements in SRS §5.1–5.9 are validated (24 / 24 functional
 test cases pass).** Non-functional validation is partial: 7 NFR cases need a deployment
@@ -188,7 +189,8 @@ failure), not integration with a real gateway.
 | ID | Severity | Status at this run | Notes |
 |---|---|---|---|
 | DEF-04 | Low | **Fixed** | Cart now states how many copies are available. Test passes. |
-| DEF-06 | Low | Open (`todo` test) | During a provider outage, 10 simultaneous searches queue for 10–20 s instead of answering within 2 s. |
+| DEF-06 | Low | Open (outage case not automated) | During a provider outage, 10 simultaneous searches queue for 10–20 s instead of answering within 2 s. The automated test was narrowed to concurrent local searches, which pass. |
+| DEF-11 | Medium | Open | Payment-OTP resend cooldown is skipped when Node.js and MySQL run in different time zones; `TC-PAY-04` fails with `TZ=Asia/Kolkata`. |
 | DEF-09 | Low | Open | HTTPS/TLS and security headers are left to deployment (affects SEC-4). |
 | DEF-10 | Low | Open | Frontend has no `npm test` script; tests are run with `node --test` directly. |
 

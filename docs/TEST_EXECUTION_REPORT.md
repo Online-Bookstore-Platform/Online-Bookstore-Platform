@@ -5,34 +5,36 @@ against the test cases in the Software Test Plan (`PES2UG24CS565_PES2UG24CS575_P
 
 | | |
 |---|---|
-| Build under test | Current workspace implementation (database audit, Gmail OTP reset and simulated payment, and order lifecycle) |
-| Executed | 31 October 2026 |
-| Executed by | Automated repository verification |
-| Environment | Node.js, configured MySQL test database; frontend production build |
+| Build under test | `main` @ `75354b2` (12 November 2026), including the Sprint 3 work: order lifecycle, customer cancellation, administrator order management, Gmail OTP reset, simulated payment OTP and contact form |
+| Executed | 29 October 2026 (Sprint 2 baseline); re-run 12 November 2026 on the build above |
+| Executed by | Uditi Mourya (PES2UG24CS565) |
+| Environment | Ubuntu 24.04, Node.js 22, MySQL 8.0.46; Node and MySQL both in UTC, as in CI (see DEF-11) |
 | How to re-run | `cd backend && npm test` (MySQL needed, see `backend/.env.example`); `cd frontend && node --test "src/**/*.test.js" && npm run build` |
 
 ## Summary
 
 | Suite | Tests | Pass | Fail | Known defect (todo) |
 |---|---:|---:|---:|---:|
-| Backend: unit + integration + STP system tests (`npm test`) | 312 | 310 | 0 | 2 |
+| Backend: unit + integration + STP system tests (`npm test`) | 325 | 325 | 0 | 0 |
 | Frontend: unit tests | 85 | 85 | 0 | 0 |
 | Frontend production build (`npm run build`) | 1 | 1 | 0 | 0 |
 
 The STP system tests start the application with real sessions, bcrypt, and MySQL transactions on a
 throw-away database. External book providers are switched off in that suite. The full backend run
-completed with 310 passing, no failing, and two documented TODO tests. Frontend verification completed
-with 85 passing tests and a successful production build.
+completed with 325 passing and none failing (47 of them in the STP system suite). Frontend verification
+completed with 85 passing tests and a successful production build. With Node in IST and MySQL in UTC,
+two payment-OTP tests fail (323 / 325): see DEF-11.
 
 Known defects are written as `todo` tests: they assert what the SRS requires, run on every build, do not
-block it, and start passing once the defect is fixed.
+block it, and start passing once the defect is fixed. At this run no `todo` tests remain: DEF-04 is fixed,
+and the DEF-06 test now covers only part of the defect (see the defect log).
 
 **Result:** Gmail OTP reset and simulated payment, payment/fulfillment separation, stock
 reservation, customer tracking, and administrator order controls are implemented. Real Gmail delivery
 was not run because mail credentials were not available in this environment. Payment
-confirmation was tested with an injected test mail sink; no gateway or financial transaction is used. The
-two remaining TODO tests are cart-stock error detail and concurrent
-catalogue lookup latency while Open Library is offline.
+confirmation was tested with an injected test mail sink; no gateway or financial transaction is used. DEF-04
+(cart-stock message) is fixed. DEF-06 (concurrent searches during an Open Library outage) and DEF-11
+(payment-OTP cooldown across time zones) remain open.
 
 ## Execution record
 
@@ -73,7 +75,7 @@ catalogue lookup latency while Open Library is offline.
 | TC-CART-01 | Add to cart; price comes from the catalogue; adding again increases the same line | Pass |
 | TC-CART-02 | Changing quantity recalculates the total; the cart is kept on the server across sessions | Pass |
 | TC-CART-03 | Remove a line; removing something not in the cart is a 404 | Pass |
-| TC-CART-04 | Quantity 0, −1, 1.5, text, 10²¹, unknown book, out-of-stock book, more than the stock: all refused, nothing added | Pass (stock explanation detail remains TODO: DEF-04) |
+| TC-CART-04 | Quantity 0, −1, 1.5, text, 10²¹, unknown book, out-of-stock book, more than the stock: all refused, nothing added | Pass (DEF-04 fixed: the message states how many copies are available) |
 | TC-CHK-01 | Delivery details validated, tidied (spaces, phone format) and saved | Pass |
 | TC-CHK-02 | Order summary recalculated on the server; a price change is picked up | Pass |
 | TC-CHK-03 | Every missing/invalid delivery field reported individually; empty cart cannot be checked out | Pass |
@@ -102,7 +104,8 @@ catalogue lookup latency while Open Library is offline.
 | STP case | What was checked | Result |
 |---|---|---|
 | PERF-1 | A catalogue search answers within 2 s | Pass |
-| PERF-1 | 10 simultaneous searches during a provider outage within 2 s | TODO (DEF-06) |
+| PERF-1 | 10 simultaneous searches against the store catalogue within 2 s | Pass (test `DEF-06 PERF-1 … local catalogue searches`) |
+| PERF-1 | 10 simultaneous searches during an Open Library outage within 2 s | **Not met / not automated** (DEF-06): the provider throttle still queues requests one per second; the automated test no longer simulates the outage |
 | PERF-2 | Order + payment within 3 s | Pass |
 | PERF-4 / SCAL | 100 simultaneous book-detail requests, all correct, well under 3 s | Pass |
 | PERF / SCAL at 500 users | Not run: needs a load-testing host |
@@ -112,20 +115,21 @@ catalogue lookup latency while Open Library is offline.
 
 ## Regression
 
-Latest verification ran the full backend suite: 312 tests, 310 pass, 0 fail, 2 todo. Frontend verification:
-85 / 85 tests pass; Vite production build passes. The full MySQL system suite includes 42 passing cases and
-two documented TODOs.
+Latest verification (12 November 2026) ran the full backend suite: 325 tests, 325 pass, 0 fail, 0 todo.
+Frontend verification: 85 / 85 tests pass; Vite production build passes. The MySQL STP system suite has 47
+tests, all passing.
 
 ## Defect log
 
 | ID | Severity | Area | Defect | Evidence | Status |
 |---|---|---|---|---|---|
-| DEF-04 | Low | Cart | Quantity above available stock does not explain the available count consistently | `TC-CART-04` | TODO; request is rejected safely |
-| DEF-06 | Low | Catalogue | Concurrent provider lookups can queue during an Open Library outage | `PERF-1` concurrency case | TODO; offline catalogue fallback remains available |
+| DEF-04 | Low | Cart | Quantity above available stock does not explain the available count consistently | `TC-CART-04` | **Fixed**: message states the available count; test passes |
+| DEF-06 | Low | Catalogue (Uditi) | Concurrent provider lookups queue one per second during an Open Library outage, so 10 simultaneous searches take 10–20 s | `PERF-1` concurrency case | Open. The automated test was narrowed to concurrent *local* searches (passes); the outage case is not automated. Needs a short circuit breaker |
 | DEF-07 | High | Transactions | Concurrent checkouts can encounter a database deadlock | `TC-INV-03` | Fixed with bounded deadlock retry |
 | DEF-08 | Medium | Catalogue | Provider outage previously showed an error page | `TC-CAT-04` | Fixed with local catalogue fallback |
 | DEF-09 | Low | Platform | Deployment security headers require production review | Response headers | Deployment follow-up |
 | DEF-10 | Low | Frontend tooling | Tests use Node's test runner directly | Frontend command in this report | Open |
+| DEF-11 | Medium | Payments (OTP) | The 60-second resend cooldown on payment OTPs is not applied when Node.js and MySQL run in different time zones (e.g. Node in IST, MySQL in UTC): MySQL writes `created_at` in its own clock and Node reads it as local time, so every challenge looks hours old. `TC-PAY-04` and the payment-OTP integration test fail with `TZ=Asia/Kolkata`, pass with `TZ=UTC` | `TZ=Asia/Kolkata npm test` → 323 / 325 | Open: run Node and MySQL in the same time zone (CI does); code fix is to pin the pool and session to UTC |
 
 DEF-01 (customer cancellation), DEF-02 (admin order operations), DEF-03 (duplicate ISBN response), and DEF-05 (already-paid response) are fixed and covered by passing system tests.
 
