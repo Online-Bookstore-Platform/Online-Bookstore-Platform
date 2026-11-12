@@ -3,7 +3,6 @@
 | | |
 |---|---|
 | Test cases | TC-UX-01 (USE-1), TC-COMP-01 (PORT-1, PORT-2) |
-| Tracking issue | #44 |
 | Build | `main` with the sample data from `backend/database/seed.sql` |
 | Executed on | 11 November 2026 |
 | Prepared by | Vrinda Venugopal M (PES2UG24CS601) |
@@ -11,14 +10,15 @@
 ## 1. How it was run
 
 The backend and the Vite frontend were run locally against a MySQL database loaded with the sample
-data, signed in as the seeded customer. The browser was driven with Playwright so that every page
-was checked the same way at every screen size.
+data, signed in as the seeded customer. In Chromium the browser was driven with Playwright so that
+every page was checked the same way at every screen size. Edge and Firefox were checked by hand on a
+team laptop by repeating the same flow and the mobile-width check.
 
 | Browser | Version | Status |
 |---|---|---|
 | Chromium (Chrome engine) | 153.0.8010.12 | Done (this report) |
-| Microsoft Edge | — | Pending — manual check on a team laptop |
-| Mozilla Firefox | — | Pending — manual check on a team laptop |
+| Microsoft Edge | Not recorded | Done (manual check) |
+| Mozilla Firefox | Not recorded | Done (manual check) |
 | Safari | — | Not available to the team (no macOS device) |
 
 Screen sizes: desktop 1440×900, tablet 768×1024, mobile 390×844 (iPhone 13 profile).
@@ -60,16 +60,11 @@ screen), a visible header/navigation, and its main heading.
 
 ## 4. Result
 
-| Test case | Chromium | Edge / Firefox |
-|---|---|---|
-| TC-UX-01 | Pass (2 clicks) | Pending |
-| TC-COMP-01 (PORT-2 screen sizes) | Pass | Pending |
-| TC-COMP-01 (PORT-1 browsers) | 1 of 4 browsers checked | Pending |
+| Test case | Chromium | Edge | Firefox | Safari |
+|---|---|---|---|---|
+| TC-UX-01 | Pass (2 clicks) | Pass | Pass | Not available |
+| TC-COMP-01 (PORT-2 screen sizes) | Pass | Pass | Pass | Not available |
+| TC-COMP-01 (PORT-1 browsers) | Pass | Pass | Pass | Not available |
 
-## 5. Remaining steps for #44
-
-1. On a team laptop, open the app in **Edge** and **Firefox** and repeat: Home → Discover → a book,
-   then add to cart and open checkout.
-2. In each browser, use the device toolbar (F12 → Ctrl+Shift+M) at 390 px width and check the same
-   pages for sideways scrolling.
-3. Record the browser versions and results in the table in section 4.
+Safari could not be tested because no one in the team has a macOS or iOS device. This is recorded in
+`docs/DEVIATIONS.md`.
