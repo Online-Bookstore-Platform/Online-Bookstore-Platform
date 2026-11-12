@@ -133,7 +133,7 @@ The SRS does not define individual FR identifiers. Therefore, this test plan use
 | Unit / integration / system tests | Node.js built-in test runner (`node --test`) |
 | Coverage | Node.js built-in coverage (`--experimental-test-coverage`) |
 | Performance | Scripted concurrent client against the real app with a 100,000-book database |
-| UI / compatibility | Manual walkthrough on Chrome, Edge and Firefox at desktop and mobile widths (#44) |
+| UI / compatibility | Manual walkthrough on Chrome, Edge and Firefox at desktop and mobile widths |
 | Defect tracking | GitHub Issues |
 | Test data | Generated customer/admin accounts, books, categories, inventory, carts, orders, and payment challenges |
 

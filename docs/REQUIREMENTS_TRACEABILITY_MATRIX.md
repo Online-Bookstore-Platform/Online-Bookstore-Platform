@@ -58,15 +58,15 @@ not implemented as written (see `docs/DEVIATIONS.md`). **Inspection** = verified
 | REL-2 Rollback on third-party failure | Transactions in `uditi/shared/transaction.js` | TC-REL-02 (via TC-PAY-02, TC-INV-02) | Verified |
 | REL-3 Automated backups | No backup mechanism | TC-REL-03 | Not run (not implemented) |
 | REL-4 Recovery | Depends on REL-3 | TC-REL-04 | Not run (not implemented) |
-| USE-1 Book details within 3 clicks | Home → catalogue → book | TC-UX-01 | Not run (#44) |
+| USE-1 Book details within 3 clicks | Home → catalogue → book | TC-UX-01 | Verified (2 clicks; `USABILITY_COMPATIBILITY_CHECK.md`) |
 | USE-2 Clear error messages | Field-level validation messages in every feature | TC-UX-02 | Verified (API level) |
 | USE-3 Consistent layout | Shared components in FE `components/shared/`, `styles/tokens.css` | — | Inspection only (no test case) |
 | USE-4 Admin learnability | Labelled admin catalogue / inventory pages | — | Inspection only (no test case) |
 | MAIN-1 Modularity | Separate feature folders for catalogue, cart, checkout, payment, orders, admin | — | Inspection |
 | MAIN-2 Logging | Error logging in `src/app.js`; `inventory_adjustments` and `order_status_history` tables | — | Partial (admin catalogue edits are not audited) |
 | MAIN-3 Code documentation | README in each backend feature folder; `docs/` | — | Inspection |
-| PORT-1 Browser compatibility | — | TC-COMP-01 | Not run (#44) |
-| PORT-2 Device compatibility | Responsive CSS modules | TC-COMP-01 | Not run (#44) |
+| PORT-1 Browser compatibility | Standard React/Vite build, no browser-specific code | TC-COMP-01 | Partial (Chrome, Edge, Firefox pass; Safari not available) |
+| PORT-2 Device compatibility | Responsive CSS modules | TC-COMP-01 | Verified (desktop, tablet, mobile) |
 
 ## 4. Other requirements (SRS §7)
 
@@ -88,9 +88,9 @@ not implemented as written (see `docs/DEVIATIONS.md`). **Inspection** = verified
 |---|---:|---:|---:|---:|---:|
 | Functional (5.1–5.10) | 10 | 9 | 1 | 0 | 0 |
 | Security (SEC) | 8 | 7 | 0 | 1 | 0 |
-| Non-functional (§6) | 20 | 5 | 3 | 8 | 4 |
+| Non-functional (§6) | 20 | 7 | 4 | 5 | 4 |
 | Other (§7) | 9 | 8 | 0 | 1 | 0 |
-| **Total** | **47** | **29** | **4** | **10** | **4** |
+| **Total** | **47** | **31** | **5** | **7** | **4** |
 
 Every SRS requirement is traced to an implementation or marked as not implemented. Requirements
 with no automated test (USE-3, USE-4, MAIN-1, MAIN-3) are verified by inspection only.

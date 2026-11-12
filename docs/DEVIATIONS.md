@@ -76,7 +76,7 @@ None of these are in SRS v1.0. They do not change any existing requirement.
 | Schedule | 17 Sep – 2 Oct 2026 | Testing done during Sprint 2 (26–30 Oct) and Part-3 (2–6 Nov); reports produced 11 Nov 2026 |
 | Tools | Postman, Selenium, JMeter (proposed) | Node.js built-in test runner for unit, integration and system tests; load measured with a scripted client; no Selenium UI automation |
 | Test cases | 38 planned | 38 planned plus TC-CAT-04, TC-CAT-05, TC-CART-04, TC-PAY-04, TC-ADM-04, TC-ADM-05, BR-3 (STP v1.1) |
-| Browsers | Chrome, Firefox, Safari, Edge | Cross-browser testing tracked in #44 |
+| Browsers | Chrome, Firefox, Safari, Edge | Chrome, Edge and Firefox checked; Safari not tested because the team has no macOS device |
 
 ## 4. Process deviations
 
