@@ -7,8 +7,10 @@ import { createCartRouter } from './cart/cart.routes.js';
 import { createOrdersRouter } from './orders/orders.routes.js';
 import { createAdminOrdersRouter } from './orders/admin-orders.routes.js';
 import { unavailableDependency, vrindaErrorHandler } from './shared/errors.js';
+import { createOrderCancellationEmailService } from './orders/order-cancellation-email.service.js';
+import { createMySqlOrderCancellationEmailRepository } from './orders/mysql-order-cancellation-email.repository.js';
 
-export function createVrindaRouter({ pool, requireAuth, requireAdmin } = {}) {
+export function createVrindaRouter({ pool, requireAuth, requireAdmin, emailService, logger = console } = {}) {
   const router = Router();
   const missing = message => (_request, _response, next) => next(unavailableDependency(message));
 
@@ -22,7 +24,11 @@ export function createVrindaRouter({ pool, requireAuth, requireAdmin } = {}) {
       router.use(['/cart', '/orders'], missing('Varchas sign-in middleware is not connected.'));
     } else {
       router.use('/cart', createCartRouter({ pool, requireAuth }));
-      router.use('/orders', createOrdersRouter({ pool, requireAuth, checkAvailability, withTransaction, deductStock }));
+      const cancellationEmails = createOrderCancellationEmailService({
+        deliveries: pool ? createMySqlOrderCancellationEmailRepository(pool) : null,
+        emailService, logger,
+      });
+      router.use('/orders', createOrdersRouter({ pool, requireAuth, checkAvailability, withTransaction, deductStock, cancellationEmails, logger }));
       if (requireAdmin) router.use('/admin/orders', createAdminOrdersRouter({ pool, requireAdmin }));
     }
   }

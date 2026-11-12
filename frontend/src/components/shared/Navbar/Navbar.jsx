@@ -14,6 +14,6 @@ export default function Navbar() {
     <div className={styles.links}>
       <NavLink to="/catalogue">Discover</NavLink><NavLink to="/categories">Categories</NavLink><NavLink to="/about">About</NavLink>
     </div>
-    <div className={styles.actions}><Link to="/profile" aria-label="Account">Account</Link>{user?.role === 'admin' && <><Link to="/admin">Manage catalogue</Link><Link to="/inventory">Inventory</Link></>}<Link to="/cart" aria-label="Cart">Cart <span aria-hidden="true">↗</span></Link><button className={styles.theme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} aria-pressed={theme === 'dark'} onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼' : '◐'}</button></div>
+    <div className={styles.actions}><Link to="/profile" aria-label="Account">Account</Link>{user?.role === 'admin' && <><Link to="/admin">Catalogue</Link><Link to="/inventory">Inventory</Link><Link to="/admin/orders">Orders</Link></>}<Link to="/cart" aria-label="Cart">Cart <span aria-hidden="true">↗</span></Link><button className={styles.theme} type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} aria-pressed={theme === 'dark'} onClick={() => setTheme(value => value === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☼' : '◐'}</button></div>
   </div></nav>;
 }

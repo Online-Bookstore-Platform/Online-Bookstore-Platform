@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, loginPath } from '../../uditi/shared/api.js';
 import { cancelOrder, getOrderTracking, getOrders, requestOrderReturn } from '../api.js';
 import styles from './Orders.module.css';
+import { canCustomerCancelOrder } from './orderRules.js';
 
 const STATUSES = {
   pending: 'Awaiting checkout',
@@ -33,6 +34,11 @@ export default function OrdersPage({ tracking = false }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [cancellingId, setCancellingId] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelError, setCancelError] = useState('');
+  const cancelLock = useRef(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -57,6 +63,37 @@ export default function OrdersPage({ tracking = false }) {
     }).finally(() => setLoading(false));
     return () => controller.abort();
   }, [tracking, orderId, navigate, reloadKey]);
+
+  async function confirmCancelOrder() {
+    if (!cancelTarget || cancelLock.current) return;
+    cancelLock.current = true;
+    const target = cancelTarget;
+    setCancelError('');
+    setNotice('');
+    setCancellingId(target.id);
+    try {
+      const updated = await cancelOrder(target.id);
+      if (tracking) setOrder(current => current ? { ...current, status: updated.status } : current);
+      else setOrders(current => current.map(item => item.id === target.id ? { ...item, status: updated.status } : item));
+      if (tracking) setHistory(current => [...current, { fromStatus: target.status, toStatus: updated.status, note: 'Customer cancelled before fulfilment.', createdAt: new Date().toISOString() }]);
+      setNotice('Your order was cancelled.');
+      setCancelTarget(null);
+    } catch (requestError) {
+      setCancelError(requestError.message);
+    } finally {
+      cancelLock.current = false;
+      setCancellingId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!cancelTarget) return undefined;
+    const onKeyDown = event => {
+      if (event.key === 'Escape' && cancellingId === null) setCancelTarget(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [cancelTarget, cancellingId]);
 
   if (loading) return <main className={styles.state} aria-live="polite"><p>{tracking ? 'Following your order…' : 'Finding your past orders…'}</p></main>;
 
@@ -108,7 +145,8 @@ export default function OrdersPage({ tracking = false }) {
         </ol>}
       </section>
       {order.status === 'delivered' && <button type="button" onClick={async () => { try { await requestOrderReturn(order.id); setReloadKey(value => value + 1); } catch (err) { setError(err.message); } }}>Request a return</button>}
-      {['pending', 'pending_collection'].includes(order.status) && order.paymentStatus !== 'succeeded' && <button type="button" onClick={async () => { try { await cancelOrder(order.id); setReloadKey(value => value + 1); } catch (err) { setError(err.message); } }}>Cancel order</button>}
+      {canCustomerCancelOrder(order.status) && <button type="button" disabled={cancellingId !== null} onClick={() => { setCancelError(''); setCancelTarget(order); }}>Cancel order</button>}
+      {notice && <p role="status" className={styles.success}>{notice}</p>}{error && <p role="alert" className={styles.message}>{error}</p>}
       <div className={styles.detailsGrid}>
         <section className={styles.panel}>
           <p className="eyebrow">In this parcel</p>
@@ -132,6 +170,7 @@ export default function OrdersPage({ tracking = false }) {
         <ol className={styles.history}>{history.map((event, index) => <HistoryEvent key={`${event.toStatus}-${index}`} event={event} />)}</ol>
       </section>}
       <Link className={styles.continueShopping} to="/catalogue">Continue shopping <span aria-hidden="true">↗</span></Link>
+      {cancelTarget && <CancelOrderDialog order={cancelTarget} busy={cancellingId !== null} error={cancelError} onKeep={() => setCancelTarget(null)} onConfirm={confirmCancelOrder} />}
     </main>;
   }
 
@@ -141,6 +180,7 @@ export default function OrdersPage({ tracking = false }) {
       <p>Find every order and follow its journey home.</p>
     </header>
     {error && <div className={styles.error} role="alert"><span>{error}</span><button type="button" onClick={() => setReloadKey(value => value + 1)}>Try again</button></div>}
+    {notice && <p role="status" className={styles.success}>{notice}</p>}
     {error && !orders.length
       ? null
       : !orders.length
@@ -152,10 +192,27 @@ export default function OrdersPage({ tracking = false }) {
       : <section className={styles.orderList} aria-label="Your orders">
         {orders.map(item => <article className={styles.orderCard} key={item.id}>
           <div className={styles.orderMeta}><p className="eyebrow">Order {item.orderNumber}</p><span>{date(item.createdAt)}</span></div>
-          <div className={styles.orderMain}><div><h2>{STATUSES[item.status] ?? item.status}</h2><p>{money(item.totalAmount)} <span>·</span> {item.currency}</p><p>Payment method: {paymentMethodLabel(item.paymentMethod)} · {customerPaymentStatus(item)}</p></div><Link to={`/orders/${item.id}`}>Track order <span aria-hidden="true">↗</span></Link></div>
+          <div className={styles.orderMain}><div><h2>{STATUSES[item.status] ?? item.status}</h2><p>{money(item.totalAmount)} <span>·</span> {item.currency}</p><p>Payment method: {paymentMethodLabel(item.paymentMethod)} · {customerPaymentStatus(item)}</p></div><div className={styles.orderActions}><Link to={`/orders/${item.id}`}>Track order <span aria-hidden="true">↗</span></Link>{canCustomerCancelOrder(item.status) && <button type="button" disabled={cancellingId !== null} onClick={() => { setCancelError(''); setCancelTarget(item); }}>Cancel order</button>}</div></div>
         </article>)}
       </section>}
+    {cancelTarget && <CancelOrderDialog order={cancelTarget} busy={cancellingId !== null} error={cancelError} onKeep={() => setCancelTarget(null)} onConfirm={confirmCancelOrder} />}
   </main>;
+}
+
+function CancelOrderDialog({ order, busy, error, onKeep, onConfirm }) {
+  return <div className={styles.modalBackdrop} onMouseDown={event => { if (event.target === event.currentTarget && !busy) onKeep(); }}>
+    <section className={styles.cancelDialog} role="alertdialog" aria-modal="true" aria-labelledby="cancel-order-title" aria-describedby="cancel-order-description">
+      <span className={styles.warningIcon} aria-hidden="true">!</span>
+      <p className="eyebrow">Order cancellation</p>
+      <h2 id="cancel-order-title">Cancel order {order.orderNumber ? `#${order.orderNumber}` : `#${order.id}`}?</h2>
+      <p id="cancel-order-description">This action cannot be undone. If you continue, your order will be cancelled and reserved stock will be returned.</p>
+      {error && <p className={styles.dialogError} role="alert">{error}</p>}
+      <div className={styles.dialogActions}>
+        <button type="button" className={styles.keepOrder} disabled={busy} onClick={onKeep} autoFocus>Keep order</button>
+        <button type="button" className={styles.confirmCancel} disabled={busy} onClick={onConfirm}>{busy ? <><span className={styles.spinner} aria-hidden="true" />Cancelling…</> : 'Confirm cancellation'}</button>
+      </div>
+    </section>
+  </div>;
 }
 
 function HistoryEvent({ event }) {

@@ -13,7 +13,7 @@ function parseOrderId(value) {
   return id;
 }
 
-export function createOrdersRouter({ pool, requireAuth, checkAvailability, withTransaction, deductStock }) {
+export function createOrdersRouter({ pool, requireAuth, checkAvailability, withTransaction, deductStock, cancellationEmails, logger = console }) {
   const router = Router();
   const orders = createOrdersService({ pool, checkAvailability, withTransaction, deductStock });
 
@@ -56,7 +56,7 @@ export function createOrdersRouter({ pool, requireAuth, checkAvailability, withT
       const [rows] = await connection.query('SELECT id, status, payment_status AS paymentStatus, stock_reserved AS stockReserved FROM orders WHERE id = ? AND user_id = ? FOR UPDATE', [orderId, request.user.id]);
       const order = rows[0];
       if (!order) throw new HttpError(404, 'ORDER_NOT_FOUND', 'We could not find that order.');
-      if (!['pending', 'pending_collection'].includes(order.status) || order.paymentStatus === 'succeeded') throw new HttpError(409, 'ORDER_NOT_CANCELLABLE', 'This order can no longer be cancelled from your account.');
+      if (!['pending', 'pending_collection', 'paid', 'confirmed', 'processing', 'packed'].includes(order.status)) throw new HttpError(409, 'ORDER_NOT_CANCELLABLE', 'This order can only be cancelled before it has shipped.');
       if (order.stockReserved) {
         const [items] = await connection.query('SELECT book_id AS bookId, quantity FROM order_items WHERE order_id = ? ORDER BY book_id', [order.id]);
         await restoreStock(connection, items);
@@ -64,8 +64,16 @@ export function createOrdersRouter({ pool, requireAuth, checkAvailability, withT
       }
       await connection.query("UPDATE orders SET status = 'cancelled' WHERE id = ?", [order.id]);
       await connection.query('INSERT INTO order_status_history (order_id, from_status, to_status, changed_by, note) VALUES (?, ?, \'cancelled\', ?, \'Customer cancelled before fulfilment.\')', [order.id, order.status, request.user.id]);
+      await connection.query('INSERT IGNORE INTO order_cancellation_email_deliveries (order_id) VALUES (?)', [order.id]);
       return { id: order.id, status: 'cancelled' };
     });
+    try {
+      const cancelledOrder = await orders.get(request.user.id, result.id);
+      await cancellationEmails?.sendForOrder(cancelledOrder);
+    } catch (error) {
+      // Cancellation is already committed; notification failures must not affect its response.
+      logger?.error?.('[email] Could not prepare order cancellation notification', { category: 'ORDER_CANCELLATION_EMAIL_PREPARATION_FAILED', orderId: result.id, code: error?.code });
+    }
     response.json({ order: result });
   }));
 

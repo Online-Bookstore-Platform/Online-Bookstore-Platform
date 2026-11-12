@@ -8,6 +8,7 @@ import PasswordResetPage from '../features/varchas/authentication/PasswordResetP
 import BookDetailsPage from '../features/varchas/book-details/index.jsx';
 import PaymentPage from '../features/varchas/payments/index.jsx';
 import AdminCataloguePage from '../features/varchas/admin-catalogue/index.jsx';
+import AdminOrdersPage from '../features/vrinda/admin-orders/index.jsx';
 import CataloguePage from '../features/uditi/catalogue/index.jsx';
 import CategoriesPage from '../features/uditi/catalogue/CategoriesPage.jsx';
 import CheckoutPage from '../features/uditi/checkout/index.jsx';
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: '/books/:bookId', element: <BookDetailsPage /> },
       { path: '/payment', element: <PaymentPage /> },
       { path: '/admin', element: <AdminCataloguePage /> },
+      { path: '/admin/orders', element: <AdminOrdersPage /> },
       { path: '/catalogue', element: <CataloguePage /> },
       { path: '/categories', element: <CategoriesPage /> },
       { path: '/checkout', element: <CheckoutPage /> },

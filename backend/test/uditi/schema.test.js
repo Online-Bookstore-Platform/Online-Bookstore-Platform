@@ -39,6 +39,7 @@ describe('database schema (#13)', databaseTests, () => {
       'delivery_details',
       'inventory',
       'inventory_adjustments',
+      'order_cancellation_email_deliveries',
       'order_confirmation_email_deliveries',
       'order_items',
       'order_status_history',

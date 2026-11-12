@@ -23,7 +23,7 @@ export function createApp({ repositories, pool, sessionSecret, sessionStore, ema
   app.use('/api', createVarchasRouter({ repositories, env, pool, emailService }));
   const auth = createAuthMiddleware(userRepository || unavailableRepositories.users);
   if (pool) app.use('/api/books', createReviewsRouter({ pool, requireAuth: auth.requireAuth, env, showPreviewReviews: env.NODE_ENV !== 'production' }));
-  app.use('/api', createVrindaRouter({ pool, requireAuth: auth.requireAuth, requireAdmin: auth.requireAdmin }));
+  app.use('/api', createVrindaRouter({ pool, requireAuth: auth.requireAuth, requireAdmin: auth.requireAdmin, emailService }));
   app.use('/api', createUditiRouter({ pool, requireAuth: auth.requireAuth, requireAdmin: auth.requireAdmin, cartReader: pool ? createDatabaseCartReader(pool) : undefined }));
   app.use((_request, response) => response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found.' } }));
   app.use((error, _request, response, _next) => {

@@ -632,7 +632,16 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       const order = created.json.order;
       const admin = api(ids.base, await sessionFor(ids.admin));
       const listed = await admin.get('/api/admin/orders');
-      assert.ok(listed.json.orders.some(item => item.id === order.id));
+      const listedOrder = listed.json.orders.find(item => item.id === order.id);
+      assert.ok(listedOrder);
+      assert.ok(listedOrder.customerName);
+      assert.ok(listedOrder.customerEmail);
+      assert.equal(listedOrder.items[0].title, 'Pride and Prejudice');
+      assert.equal(listedOrder.items[0].quantity, 1);
+      const detailedOrder = (await admin.get(`/api/admin/orders/${order.id}`)).json.order;
+      assert.ok(detailedOrder.customerName);
+      assert.ok(detailedOrder.customerEmail);
+      assert.equal(detailedOrder.items[0].title, 'Pride and Prejudice');
       assert.equal((await buyer.client.post(`/api/admin/orders/${order.id}/status`, { status: 'confirmed' })).status, 403);
       const sequence = ['confirmed', 'processing', 'packed', 'shipped', 'out_for_delivery', 'delivered'];
       for (const status of sequence) assert.equal((await admin.patch(`/api/admin/orders/${order.id}/status`, { status })).status, 200, status);
@@ -645,6 +654,23 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
       const tracked = (await buyer.client.get(`/api/orders/${order.id}/tracking`)).json.tracking;
       assert.equal(tracked.order.status, 'returned');
       assert.deepEqual(tracked.statusHistory.slice(-2).map(item => item.toStatus), ['return_requested', 'returned']);
+
+      const secondBuyer = await customerWith(ids.base, [{ bookId: ids.pride, quantity: 1 }]);
+      const directOrder = (await draft(secondBuyer.client, { paymentMethod: 'cod' })).json.order;
+      assert.equal((await buyer.client.post(`/api/orders/${directOrder.id}/cancel`, {})).status, 404);
+      assert.equal((await admin.patch(`/api/admin/orders/${directOrder.id}/status`, { status: 'delivered' })).status, 409);
+      assert.equal((await admin.patch(`/api/admin/orders/${directOrder.id}/status`, { status: 'confirmed' })).status, 200);
+      assert.equal((await admin.patch(`/api/admin/orders/${directOrder.id}/status`, { status: 'processing' })).status, 200);
+      assert.equal((await admin.patch(`/api/admin/orders/${directOrder.id}/status`, { status: 'shipped' })).status, 200);
+      assert.equal((await secondBuyer.client.post(`/api/orders/${directOrder.id}/cancel`, {})).status, 409);
+      assert.equal((await admin.patch(`/api/admin/orders/${directOrder.id}/status`, { status: 'delivered' })).status, 200);
+      assert.equal((await secondBuyer.client.post(`/api/orders/${directOrder.id}/cancel`, {})).status, 409);
+      assert.equal((await admin.patch(`/api/admin/orders/${directOrder.id}/status`, { status: 'shipped' })).status, 409);
+
+      const cancelBuyer = await customerWith(ids.base, [{ bookId: ids.pride, quantity: 1 }]);
+      const cancelOrder = (await draft(cancelBuyer.client, { paymentMethod: 'cod' })).json.order;
+      assert.equal((await admin.patch(`/api/admin/orders/${cancelOrder.id}/status`, { status: 'cancelled' })).status, 200);
+      assert.equal((await admin.patch(`/api/admin/orders/${cancelOrder.id}/status`, { status: 'processing' })).status, 409);
     });
 
     it('TC-ADM-02 book create / update / price change / remove, with validation; removed books leave the catalogue but keep old orders intact', async () => {
@@ -731,10 +757,14 @@ describe('STP system tests (real app, real MySQL)', databaseTests, () => {
   describe('known defects (see docs/TEST_EXECUTION_REPORT.md)', () => {
     it('TC-ORD-04 / BR-2 a customer can cancel a still-pending order and its inventory reservation', async () => {
       const { client } = await customerWith(ids.base, [{ bookId: ids.pride, quantity: 1 }]);
+      const before = await stock(ids.pride);
       const order = (await draft(client)).json.order;
       const cancelled = await client.post(`/api/orders/${order.id}/cancel`, {});
       assert.equal(cancelled.status, 200);
       assert.equal((await client.get(`/api/orders/${order.id}`)).json.order.status, 'cancelled');
+      assert.equal(await stock(ids.pride), before);
+      assert.equal((await client.post(`/api/orders/${order.id}/cancel`, {})).status, 409);
+      assert.equal(await stock(ids.pride), before, 'repeated cancellation cannot restore stock twice');
     });
 
     it('TC-ADM-05 / SRS 5.8 an administrator can list customer orders', async () => {
