@@ -36,4 +36,6 @@ Both commands use `backend/.env`, refuse `NODE_ENV=production`, and never create
 
 `20261031_create_order_confirmation_email_deliveries.sql` adds an additive delivery outbox keyed to an order. It records pending, in-flight, and sent states so post-commit confirmation email can be retried without duplicating ordinary repeated requests; it preserves all existing order data.
 
+`20261112_create_order_cancellation_email_deliveries.sql` adds a per-order cancellation email outbox. `npm run db:setup` applies it to existing databases, and new databases receive the same table from `schema.sql`.
+
 `20261101_create_contact_submissions.sql` adds the table used by the About page contact form. Submitted messages are stored for follow-up; the form only reports success after MySQL confirms the insert.

@@ -150,5 +150,6 @@ test('successful payment updates status and deducts stock inside the supplied tr
   assert.deepEqual(result, { orderId: 21, status: 'confirmed', paymentAttempt: { status: 'succeeded' } });
   assert.deepEqual(deducted, [{ bookId: 3, quantity: 2 }]);
   assert.ok(statements.some(statement => statement.sql.startsWith('INSERT INTO order_status_history') && statement.params[1] === 'pending' && statement.params[2] === 'confirmed'));
+  assert.ok(statements.some(statement => statement.sql.startsWith('UPDATE orders SET stock_reserved') && statement.params[0] === 1), 'deducted inventory remains marked as reserved for cancellation');
   assert.ok(statements.some(statement => statement.sql.startsWith('UPDATE orders SET payment_status')));
 });

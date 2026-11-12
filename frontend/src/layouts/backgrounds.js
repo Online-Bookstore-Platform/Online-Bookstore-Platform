@@ -6,7 +6,7 @@ const background = (category, theme) => `/backgrounds/${category}/${theme}.webp`
 
 const SOLID_BACKGROUND_ROUTES = [
   /^\/inventory\/?$/,
-  /^\/admin\/?$/,
+  /^\/admin(?:\/orders)?\/?$/,
   /^\/cart\/?$/,
   /^\/(?:payment|checkout)\/?$/,
   /^\/orders(?:\/.*)?$/,

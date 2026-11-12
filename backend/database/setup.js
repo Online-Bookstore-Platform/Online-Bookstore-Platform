@@ -32,6 +32,7 @@ const MIGRATION_NAMES = [
   '20261030_order_lifecycle_and_reset_otp.sql', '20261031_create_payment_otp_challenges.sql',
   '20261031_create_order_confirmation_email_deliveries.sql',
   '20261101_create_contact_submissions.sql',
+  '20261112_create_order_cancellation_email_deliveries.sql',
 ];
 
 async function applyExistingDatabaseMigrations(connection) {
@@ -47,6 +48,7 @@ async function applyExistingDatabaseMigrations(connection) {
   if (!await hasTable('password_reset_tokens')) await apply('20261028_create_password_reset_tokens.sql');
   if (!await hasTable('payment_otp_challenges')) await apply('20261031_create_payment_otp_challenges.sql');
   if (!await hasTable('order_confirmation_email_deliveries')) await apply('20261031_create_order_confirmation_email_deliveries.sql');
+  if (!await hasTable('order_cancellation_email_deliveries')) await apply('20261112_create_order_cancellation_email_deliveries.sql');
   if (!await hasTable('contact_submissions')) await apply('20261101_create_contact_submissions.sql');
 
   let orderColumns = await columns('orders');

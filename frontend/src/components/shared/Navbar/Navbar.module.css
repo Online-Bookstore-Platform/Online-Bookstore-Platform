@@ -7,4 +7,4 @@
 .links a:hover, .actions a:hover, .links a:focus-visible, .actions a:focus-visible { color: var(--ink); }
 .actions a[href='/cart'] { color: var(--ink); }
 .theme { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer; }
-@media (max-width: 620px) { .inner { min-height: 62px; gap: 12px; } .links { gap: 12px; } .links a, .actions a { font-size: .75rem; } .links a:nth-child(3) { display: none; } .actions { gap: 12px; } }
+@media (max-width: 620px) { .inner { min-height: 62px; flex-wrap: wrap; gap: 8px 12px; padding-block: 8px; } .links { order: 2; justify-content: flex-end; gap: 12px; } .links a, .actions a { font-size: .75rem; } .links a:nth-child(3) { display: none; } .actions { order: 3; width: 100%; justify-content: space-between; gap: 8px; } }

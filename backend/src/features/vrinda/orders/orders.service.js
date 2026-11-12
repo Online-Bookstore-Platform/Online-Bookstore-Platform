@@ -66,6 +66,7 @@ async function createOrderInTransaction({ connection, userId, requestedDelivery,
     await repository.createInitialStatus(connection, orderId, userId);
     if (simulatedPayment) {
       await deductStock(connection, items.map(({ bookId, quantity }) => ({ bookId, quantity })));
+      await repository.setStockReserved(connection, orderId, true);
       if (!await repository.changeOrderStatus(connection, orderId, 'pending', 'confirmed')) {
         throw new HttpError(409, 'ORDER_STATUS_CHANGED', 'The order changed while payment was being confirmed.');
       }
@@ -208,11 +209,12 @@ export function createOrdersService({ pool, checkAvailability, withTransaction, 
           const items = await repository.listOrderStockItems(connection, order.id);
           if (!items.length) throw new HttpError(409, 'EMPTY_ORDER', 'This order has no items to fulfill.');
           await deductStock(connection, items);
+          await repository.setStockReserved(connection, order.id, true);
         }
         if (paymentStatus !== 'succeeded' && order.stockReserved) {
           await restoreStock(connection, await repository.listOrderStockItems(connection, order.id));
+          await repository.setStockReserved(connection, order.id, false);
         }
-        if (order.stockReserved) await repository.setStockReserved(connection, order.id, false);
         const nextStatus = paymentStatus === 'succeeded' ? 'confirmed' : order.status;
         if (nextStatus !== order.status && !await repository.changeOrderStatus(connection, order.id, order.status, nextStatus)) {
           throw new HttpError(409, 'ORDER_STATUS_CHANGED', 'The order status changed while the payment was being recorded.');

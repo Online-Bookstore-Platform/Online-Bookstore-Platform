@@ -14,6 +14,10 @@
 .orderMain p { margin: 6px 0 0; color: var(--muted); font-size: .82rem; }
 .orderMain a { flex: 0 0 auto; color: var(--ink); font-size: .82rem; text-decoration: none; }
 .orderMain a:hover { text-decoration: underline; }
+.orderActions { display: flex; align-items: center; gap: 16px; }
+.orderActions button,.statusCard > button { min-height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; background: transparent; color: var(--ink); font: inherit; font-size: .78rem; cursor: pointer; }
+.orderActions button:disabled,.statusCard > button:disabled { opacity: .6; cursor: progress; }
+.success { color: var(--success-ink); font-size: .84rem; line-height: 1.6; }
 .empty { padding: clamp(28px, 6vw, 64px); }
 .empty h2 { max-width: 18ch; margin: 14px 0; font: 450 clamp(1.9rem, 4vw, 2.7rem)/1.08 var(--serif); letter-spacing: -.04em; }
 .empty > p:not(.eyebrow) { max-width: 480px; color: var(--muted); font-size: .9rem; line-height: 1.7; }
@@ -66,5 +70,20 @@
 .stateActions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 12px; }
 .stateActions button { min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 3px; background: var(--ink); color: var(--paper); font: inherit; font-size: .83rem; cursor: pointer; }
 .state .textLink { color: var(--ink); }
+.modalBackdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 22px; background: rgb(18 20 17 / 58%); backdrop-filter: blur(3px); }
+.cancelDialog { width: min(100%, 480px); padding: clamp(24px, 5vw, 38px); border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 80px rgb(0 0 0 / 25%); }
+.warningIcon { width: 42px; height: 42px; display: grid; place-items: center; margin-bottom: 22px; border-radius: 50%; background: var(--warning-surface); color: var(--warning-text); font: 650 1.3rem var(--serif); }
+.cancelDialog .eyebrow { margin: 0 0 8px; color: var(--muted); }
+.cancelDialog h2 { margin: 0; font: 450 clamp(1.6rem, 5vw, 2rem)/1.15 var(--serif); letter-spacing: -.025em; }
+.cancelDialog > p:not(.eyebrow) { margin: 14px 0 0; color: var(--muted); font-size: .88rem; line-height: 1.7; }
+.dialogError { padding: 11px 13px; border-left: 3px solid var(--danger-ink); background: var(--danger-surface); color: var(--danger-ink) !important; }
+.dialogActions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.dialogActions button { min-height: 44px; padding: 0 15px; border: 1px solid var(--line); border-radius: 3px; font: inherit; font-size: .8rem; cursor: pointer; }
+.dialogActions button:disabled { opacity: .6; cursor: progress; }
+.keepOrder { background: var(--surface); color: var(--ink); }
+.confirmCancel { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border-color: var(--danger-ink) !important; background: var(--danger-ink); color: #fff; }
+.spinner { width: 13px; height: 13px; border: 2px solid rgb(255 255 255 / 55%); border-top-color: #fff; border-radius: 50%; animation: cancel-spin .7s linear infinite; }
+@keyframes cancel-spin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) { .dialogActions { display: grid; grid-template-columns: 1fr; }.dialogActions button { width: 100%; } }
 @media (max-width: 760px) { .detailsGrid { grid-template-columns: minmax(0, 1fr); }.progress { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 18px; }.progress li:nth-child(4)::before { display: none; } }
 @media (max-width: 520px) { .page { padding: 44px 20px 80px; }.orderMain { align-items: flex-start; flex-direction: column; }.orderMain h2 { font-size: 1.35rem; }.statusHead { align-items: flex-start; flex-direction: column; }.progress { grid-template-columns: repeat(2, minmax(0, 1fr)); }.progress li:nth-child(2n)::before { display: none; } }
