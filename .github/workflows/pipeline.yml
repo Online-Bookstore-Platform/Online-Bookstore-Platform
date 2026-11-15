@@ -28,9 +28,9 @@ env:
   SESSION_SECRET: ci-only-session-secret-not-used-in-production
 
 jobs:
-  # ── Stage 1 ─────────────────────────────────────────────────────────────
+  # Stage 1
   backend-tests:
-    name: 🧪 Backend unit & integration tests
+    name: Backend unit & integration tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -75,15 +75,15 @@ jobs:
         run: |
           count() { grep -E "^ℹ $1 " test-output.txt | awk '{print $3}' || echo 0; }
           {
-            echo "### 🧪 Backend unit & integration tests"
+            echo "### Backend unit & integration tests"
             echo ""
-            echo "| Total | ✅ Passed | ❌ Failed | ⏭️ Skipped |"
+            echo "| Total | Passed | Failed | Skipped |"
             echo "|---:|---:|---:|---:|"
             echo "| $(count tests) | $(count pass) | $(count fail) | $(count skipped) |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
-    name: 🎨 Frontend tests & build
+    name: Frontend tests & build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -115,9 +115,9 @@ jobs:
         run: |
           count() { grep -E "^ℹ $1 " test-output.txt | awk '{print $3}' || echo 0; }
           {
-            echo "### 🎨 Frontend"
+            echo "### Frontend"
             echo ""
-            echo "| Tests | ✅ Passed | ❌ Failed | 📦 Bundle size |"
+            echo "| Tests | Passed | Failed | Bundle size |"
             echo "|---:|---:|---:|---:|"
             echo "| $(count tests) | $(count pass) | $(count fail) | $(du -sh dist 2>/dev/null | cut -f1 || echo n/a) |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -129,9 +129,9 @@ jobs:
           path: frontend/dist
           retention-days: 7
 
-  # ── Stage 2 ─────────────────────────────────────────────────────────────
+  # Stage 2
   system-tests:
-    name: ✅ System tests (Test Plan)
+    name: System tests (Test Plan)
     needs: backend-tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -174,15 +174,15 @@ jobs:
         run: |
           count() { grep -E "^ℹ $1 " test-output.txt | awk '{print $3}' || echo 0; }
           {
-            echo "### ✅ System tests (STP v1.1)"
+            echo "### System tests (STP v1.1)"
             echo ""
-            echo "| Total | ✅ Passed | ❌ Failed | 📝 Todo |"
+            echo "| Total | Passed | Failed | Todo |"
             echo "|---:|---:|---:|---:|"
             echo "| $(count tests) | $(count pass) | $(count fail) | $(count todo) |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
-    name: 📊 Code coverage
+    name: Code coverage
     needs: backend-tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -226,7 +226,7 @@ jobs:
             'test/**/*.test.js'
 
       - name: Write coverage summary
-        run: node ../.github/scripts/coverage-summary.mjs lcov.info "📊 Backend code coverage"
+        run: node ../.github/scripts/coverage-summary.mjs lcov.info "Backend code coverage"
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -235,9 +235,9 @@ jobs:
           path: backend/lcov.info
           retention-days: 14
 
-  # ── Stage 3 ─────────────────────────────────────────────────────────────
+  # Stage 3
   release:
-    name: 🚀 Package release
+    name: Package release
     needs: [system-tests, coverage, frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -269,7 +269,7 @@ jobs:
       - name: Write release summary
         run: |
           {
-            echo "### 🚀 Release bundle ready"
+            echo "### Release bundle ready"
             echo ""
             echo "| | |"
             echo "|---|---|"
