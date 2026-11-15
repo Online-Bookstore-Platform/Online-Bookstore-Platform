@@ -1,0 +1,281 @@
+name: CI/CD Pipeline
+
+run-name: "${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.number, github.event.pull_request.title) || format('{0} on {1}', github.event_name, github.ref_name) }}"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 22
+  TZ: UTC
+  DB_HOST: 127.0.0.1
+  DB_PORT: 3306
+  DB_NAME: bookstore_ci
+  DB_USER: root
+  DB_PASSWORD: bookstore_ci_password
+  NODE_ENV: test
+  SESSION_SECRET: ci-only-session-secret-not-used-in-production
+
+jobs:
+  # Stage 1
+  backend-tests:
+    name: Backend unit & integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: bookstore_ci_password
+          MYSQL_DATABASE: bookstore_ci
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pbookstore_ci_password"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create database schema and sample data
+        run: touch .env && npm run db:setup
+
+      - name: Run unit and integration tests
+        run: |
+          node --env-file=.env --test --test-reporter=spec \
+            'test/*.test.js' 'test/uditi/**/*.test.js' 'test/varchas/**/*.test.js' 'test/vrinda/**/*.test.js' \
+            | tee test-output.txt
+
+      - name: Write test summary
+        if: always()
+        run: |
+          count() { grep -E "^ℹ $1 " test-output.txt | awk '{print $3}' || echo 0; }
+          {
+            echo "### Backend unit & integration tests"
+            echo ""
+            echo "| Total | Passed | Failed | Skipped |"
+            echo "|---:|---:|---:|---:|"
+            echo "| $(count tests) | $(count pass) | $(count fail) | $(count skipped) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  frontend:
+    name: Frontend tests & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: node --test --test-reporter=spec 'src/**/*.test.js' | tee test-output.txt
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Write build summary
+        if: always()
+        run: |
+          count() { grep -E "^ℹ $1 " test-output.txt | awk '{print $3}' || echo 0; }
+          {
+            echo "### Frontend"
+            echo ""
+            echo "| Tests | Passed | Failed | Bundle size |"
+            echo "|---:|---:|---:|---:|"
+            echo "| $(count tests) | $(count pass) | $(count fail) | $(du -sh dist 2>/dev/null | cut -f1 || echo n/a) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # Stage 2
+  system-tests:
+    name: System tests (Test Plan)
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: bookstore_ci_password
+          MYSQL_DATABASE: bookstore_ci
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pbookstore_ci_password"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create database schema and sample data
+        run: touch .env && npm run db:setup
+
+      - name: Run system test cases from the STP
+        run: node --env-file=.env --test --test-reporter=spec 'test/system/**/*.test.js' | tee test-output.txt
+
+      - name: Write test summary
+        if: always()
+        run: |
+          count() { grep -E "^ℹ $1 " test-output.txt | awk '{print $3}' || echo 0; }
+          {
+            echo "### System tests (STP v1.1)"
+            echo ""
+            echo "| Total | Passed | Failed | Todo |"
+            echo "|---:|---:|---:|---:|"
+            echo "| $(count tests) | $(count pass) | $(count fail) | $(count todo) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  coverage:
+    name: Code coverage
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: bookstore_ci_password
+          MYSQL_DATABASE: bookstore_ci
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pbookstore_ci_password"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create database schema and sample data
+        run: touch .env && npm run db:setup
+
+      - name: Measure coverage across the full test suite
+        run: |
+          node --env-file=.env --test --experimental-test-coverage \
+            --test-coverage-exclude='test/**' --test-coverage-exclude='**/node_modules/**' \
+            --test-reporter=dot --test-reporter-destination=stdout \
+            --test-reporter=lcov --test-reporter-destination=lcov.info \
+            'test/**/*.test.js'
+
+      - name: Write coverage summary
+        run: node ../.github/scripts/coverage-summary.mjs lcov.info "Backend code coverage"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: backend/lcov.info
+          retention-days: 14
+
+  # Stage 3
+  release:
+    name: Package release
+    needs: [system-tests, coverage, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: release/frontend
+
+      - name: Assemble release bundle
+        run: |
+          mkdir -p release/backend
+          cp -r backend/src backend/database backend/package.json backend/package-lock.json backend/.env.example release/backend/
+          cp README.md release/ 2>/dev/null || true
+          echo "${GITHUB_SHA}" > release/VERSION
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: online-bookstore-${{ github.sha }}
+          path: release
+          retention-days: 30
+
+      - name: Write release summary
+        run: |
+          {
+            echo "### Release bundle ready"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo "| Artifact | \`online-bookstore-${GITHUB_SHA}\` |"
+            echo "| Contents | Backend source + database scripts, built frontend (\`frontend/\`) |"
+            echo ""
+            echo "Download it from the **Artifacts** section of this run. To run it: \`cd backend && npm ci && npm start\`, then serve \`frontend/\`."
+          } >> "$GITHUB_STEP_SUMMARY"
