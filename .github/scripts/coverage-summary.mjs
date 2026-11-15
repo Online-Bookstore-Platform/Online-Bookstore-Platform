@@ -26,10 +26,9 @@ for (const line of readFileSync(file, 'utf8').split('\n')) {
 }
 
 const pct = (hit, found) => (found ? (100 * hit) / found : 100);
-const badge = value => (value >= 90 ? '🟢' : value >= 75 ? '🟡' : '🔴');
 const cell = (hit, found) => {
   const value = pct(hit, found);
-  return `${badge(value)} ${value.toFixed(1)}% <sub>(${hit}/${found})</sub>`;
+  return `${value.toFixed(1)}% <sub>(${hit}/${found})</sub>`;
 };
 
 const total = { lh: 0, lf: 0, bh: 0, bf: 0, fh: 0, ff: 0 };
@@ -45,8 +44,6 @@ const summary = [
   '|---|---|---|---|',
   ...rows,
   `| **Total** | **${cell(total.lh, total.lf)}** | **${cell(total.bh, total.bf)}** | **${cell(total.fh, total.ff)}** |`,
-  '',
-  '🟢 ≥ 90% · 🟡 ≥ 75% · 🔴 below 75%',
   '',
 ].join('\n');
 
